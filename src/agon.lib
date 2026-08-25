@@ -1,0 +1,191 @@
+;=====================================================================
+; agon.lib -- macros and equates for the Agon CP/M 3 BIOS
+;=====================================================================
+;
+; (c) 2026 Nick J. Date. Released under the MIT Licence. See the accompanying
+; LICENSE file for details.
+;
+; CP/M 3 code:
+;     Copyright (C) 1978-1982 Digital Research, Inc.
+;
+; CP/M and its derivatives are used and distributed under the
+; CP/M Licence 2022, with permission granted by DRDOS, Inc.,
+; successor in interest to Digital Research.
+;
+;
+; THE GATE MECHANISM
+; ------------------
+; The BIOS runs as plain Z80 code inside a 64K MBASE segment.  Anything
+; that needs the eZ80's 24-bit addressing -- MOS calls, cross-segment
+; block moves, and MBASE changes -- is done by calling into an ADL-mode
+; supervisor which is loaded at $040000 by the boot loader.
+;
+; UM0077's CALL attributes table gives the encoding for a call issued
+; from Z80 mode with a 24-bit target as:
+;
+;       CALL.IL Mmn   ADL=0   52, CD, nn, mm, MM
+;
+; and Table 49 states that this pushes the two-byte return address onto
+; the SPL stack together with a 02h mode byte -- NOT onto the Z80-mode
+; stack.  The supervisor returns with RET.LIL, which UM0077 Table 83
+; documents as popping that return address back off SPL and forming the
+; final PC as {MBASE, PC[15:0]} using the CURRENT MBASE.
+;
+; That last detail is what makes ?bank possible: the supervisor can
+; change MBASE and return, and execution resumes at the same 16-bit
+; offset in the newly selected segment.  Verified on hardware by the
+; Phase 0 probe.
+;
+; The supervisor lives in segment $04, so every gate address here is a
+; 16-bit offset with an implied high byte of 04h.
+
+gate$seg	equ	004h		; MBASE segment holding the supervisor
+gate$base	equ	00100h		; gate table offset within that segment
+
+; Gate table entries, 4 bytes each (ADL-mode JP).  MUST match the order
+; in the supervisor's gate table.  Nothing else may be inserted.
+
+g$bank		equ	gate$base+00h	; A = CP/M bank number -> switch
+g$move		equ	gate$base+04h	; HL=dest DE=src BC=count, banked
+g$xmove		equ	gate$base+08h	; B=dest bank C=src bank
+g$conout	equ	gate$base+0Ch	; C = character
+g$conin		equ	gate$base+10h	; -> A = character
+g$const		equ	gate$base+14h	; -> A = 0FFh if character ready
+g$time		equ	gate$base+18h	; C = 0 get, 0FFh set
+g$dread		equ	gate$base+1Ch	; disk read  (see agondsk.asm)
+g$dwrite	equ	gate$base+20h	; disk write
+g$dlogin	equ	gate$base+24h	; drive login / open image
+g$ldccp		equ	gate$base+28h	; load CCP.COM into the TPA
+g$setcom	equ	gate$base+2Ch	; register mutable common extents
+g$mio		equ	gate$base+30h	; M: RAM drive transfer.  HL = parameter
+					; block (same layout as g$dread), and
+					; A = 0 to read, 1 to write.  Appended
+					; here rather than placed next to the
+					; other disk gates because the offsets
+					; above are hard-coded on both sides.
+g$fidinit	equ	gate$base+38h	; load and start the field installable
+					; device drivers named in FIDCONF.INI.
+					; HL = descriptor block, see agonchr.asm.
+					; Returns A = modules installed.
+g$fidcio	equ	gate$base+3Ch	; character I/O for a device supplied by a
+					; driver.  A = operation (0 in, 1 out,
+					; 2 in status, 3 out status), B = device,
+					; C = character.  Returns A.
+g$drvnew	equ	gate$base+34h	; install a drive the system generator
+					; knows nothing about.  HL = request
+					; block, see agondsk.asm.  Returns A = 0
+					; on success, or a reason code.
+g$fiddio	equ	gate$base+40h	; disk I/O for a drive supplied by a
+					; loadable driver.  A = operation (0
+					; read, 1 write, 2 login, 3 init),
+					; B = @adrv, C = @rdrv, and for read
+					; and write HL = parameter block in the
+					; same nine-byte shape g$dread uses.
+					; Returns A = 0, or 1 for a permanent
+					; error.  See fid$io in agondsk.asm.
+; ---------------------------------------------------------------------
+; RETIRED -- RESERVED, NOT SPARE.
+;
+; The two entries below are RET in the built image and do nothing.  They
+; supported GETDATE.COM and CHCKDATE.COM, both of which flooded the
+; console when run on hardware for a cause that was never found, and the
+; gate bodies were retired rather than left as a trap.  See the block
+; marked "RETIRED" in cpm3.asm, and the v8e notes in BUILD.md.
+;
+; The equates are KEPT so that every offset below +44h holds its value
+; and nothing downstream shifts, and so that a new gate is given +4Ch
+; rather than silently reusing an offset a stale .FID might still call.
+; DO NOT CALL EITHER OF THESE.  The descriptions record what they did.
+; ---------------------------------------------------------------------
+g$rtcraw	equ	gate$base+44h	; RETIRED.  Was: the raw VDP clock packet
+					; and the status of the exchange that
+					; fetched it.  HL = an eight-byte buffer:
+					;   +0 status  0 not attempted, 1 packet
+					;             received, 2 no reply, 3 not
+					;             a usable date
+					;   +1 payload length of that packet
+					;   +2 six raw packet bytes
+					; Used by GETDATE.COM; nothing in the
+					; BIOS depends on it.
+g$esptime	equ	gate$base+48h	; RETIRED.  Was: compare the running clock with the
+					; ESP32's reckoning, and optionally put
+					; the clock back to it.  HL = a ten-byte
+					; buffer, filled with the ESP32's time
+					; at +0 and CP/M's at +5, each as @date
+					; low, @date high, hour, minute and
+					; second in BCD.  <C> = 0 to report,
+					; 1 to set the clock first.  Returns
+					; A = 0, or 1 if the startup fetch never
+					; produced a usable date.  Used by
+					; GETDATE.COM and CHCKDATE.COM.
+
+; GATE -- call the supervisor entry at offset ?addr.
+; Preserves all registers except those the specific gate documents.
+
+GATE	MACRO	?addr
+	db	052h,0CDh		; CALL.SIL
+	dw	?addr
+	db	gate$seg
+	ENDM
+
+
+; CP/M 3 DISK STRUCTURE MACROS
+; ----------------------------
+; The distribution's CPM3.LIB is not present in the source archive, so
+; DPH and DPB are defined here from the layout given in the CP/M 3
+; System Guide.  Written out longhand rather than reproduced from the
+; original macros.
+
+; DPH -- Disk Parameter Header body.  The four driver pointers and the
+; relative drive byte are emitted by the caller immediately BEFORE the
+; label, since the XDPH extends backwards from the DPH proper.
+;   ?trans  sector translation table, 0 for none
+;   ?dpb    disk parameter block
+;   ?csize  checksum vector size, 0 for a permanently mounted drive
+;   ?asize  allocation vector size in bytes
+
+DPH	MACRO	?trans,?dpb,?csize,?asize
+	dw	?trans			; XLT   sector translate table
+	db	0,0,0,0,0,0,0,0,0	; scratch area used by the BDOS
+	db	0			; MF    media flag
+	dw	?dpb			; DPB   disk parameter block
+	;
+	; 0FFFEh IS A REQUEST, 0 IS A REFUSAL.
+	;
+	; These five fields were 0 / 0FFFFh, which reads to GENCPM as
+	; "the BIOS supplies these itself".  GENCPM's need$tbl only
+	; allocates when it finds 0FFFEh:
+	;
+	;   if (dph.dirbcb = 0fffeh) or (dph.dtabcb = 0fffeh) or
+	;      (dph.hash = 0fffeh) or (dph.alv = 0fffeh) or
+	;      (dph.csv = 0fffeh) then all$some = true;
+	;
+	; With none of them set, need$tbl returned false and GENCPM
+	; skipped get$alloc$chk, setup$hash and setbuf altogether -- so
+	; the drive was generated with a NULL allocation vector and NULL
+	; directory and data buffer control blocks.  The first directory
+	; read then handed the BDOS a null BCB and the system died there,
+	; immediately after a successful login.
+	;
+	; The tell was visible for several builds and went unread: GENCPM
+	; never asked any buffer-allocation or hashing questions.  System
+	; Guide 5.1 says it asks those precisely when it finds 0FFFEh.
+	;
+	; Values below follow the sample DPH in System Guide Appendix
+	; ("dw 0fffeh,0fffeh,0fffeh ; dirbcb, dtabcb, hash alloc'd by
+	; GENCPM").  CSV is left at 0: CKS in our DPB is 0 because the
+	; medium is permanently mounted, so no checksum vector is needed
+	; and asking GENCPM for one would waste common memory.
+	dw	0			; CSV   none: CKS=0, medium is fixed
+	dw	0FFFEh			; ALV   allocation vector, GENCPM allocates
+	dw	0FFFEh			; DIRBCB directory BCB, GENCPM allocates
+	dw	0FFFEh			; DTABCB data BCB, GENCPM allocates
+	dw	0FFFEh			; HASH  hash table, GENCPM allocates
+	db	0			; HBANK set by GENCPM when HASH is 0FFFEh
+	ENDM
+
+; The DPB is written out longhand in agondsk.asm rather than by macro:
+; its shift/mask fields (BSH, BLM, EXM, PSH, PHM) are all derived from
+; the block and physical sector sizes, and computing them inside an
+; 8080 macro is more obscure than simply stating the values with the
+; arithmetic shown in a comment.

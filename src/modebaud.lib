@@ -1,0 +1,85 @@
+;=====================================================================
+; modebaud.lib -- character device mode bits and baud rate codes
+;=====================================================================
+;
+; (c) 2026 Nick J. Date. Released under the MIT Licence. See the accompanying
+; LICENSE file for details.
+;
+; CP/M 3 code:
+;     Copyright (C) 1978-1982 Digital Research, Inc.
+;
+; CP/M and its derivatives are used and distributed under the
+; CP/M Licence 2022, with permission granted by DRDOS, Inc.,
+; successor in interest to Digital Research.
+;
+;
+; BIOSKRNL.ASM opens with "maclib modebaud", but MODEBAUD.LIB is not
+; present in the CP/M 3 source archive.  It was previously dealt with by
+; commenting that line out.  That left "ani mb$xonxoff" in coster with an
+; undefined symbol, which RMAC does not treat as fatal -- it reports
+;
+;       U0137 7EE600      mov a,m , ani mb$xonxoff
+;
+; (the separator in that quoted line is written as a comma here on
+; purpose: RMAC treats an exclamation mark as a statement separator
+; that TERMINATES a
+; comment, so an exclamation mark inside a comment gets assembled as a
+; real instruction.  Reproducing the error text verbatim caused exactly
+; that, which is a neat demonstration of the hazard.)
+;
+; and quietly assembles ANI 0.  The effect happens to be harmless (every
+; device is then treated as non-XON, which is what we want), but an
+; assembler error absorbed in silence is not something to build on, and
+; the previous claim that the kernel assembled with no undefined symbols
+; was simply wrong.
+;
+; This file restores the symbols from their documented definitions so
+; that BIOSKRNL.ASM can be assembled unmodified.
+;
+; MODE BITS -- CP/M 3 System Guide, Table 4-7:
+;
+;       00000001  input device (such as a keyboard)
+;       00000010  output device (such as a printer)
+;       00000011  input/output device (such as a terminal or modem)
+;       00000100  device has software-selectable baud rates
+;       00001000  device may use XON protocol
+;       00010000  XON/XOFF protocol enabled
+;
+; Note a discrepancy in the manual itself: Table 4-7 describes bit 3
+; (08h) as "device may use XON protocol", while the sample CHARIO listing
+; in Appendix I.2 writes the same bit as mb$serial, e.g.
+;
+;       db  mb$in$out+mb$serial+mb$softbaud    (assembles to 0Fh)
+;
+; 03h + 04h + 08h = 0Fh, so the two names denote the same bit.  Both are
+; defined below; they are aliases, not separate flags.
+
+mb$input	equ	00000001b	; input device
+mb$output	equ	00000010b	; output device
+mb$in$out	equ	00000011b	; both
+mb$softbaud	equ	00000100b	; software-selectable baud rate
+mb$serial	equ	00001000b	; serial device / may use XON protocol
+mb$xon		equ	00001000b	; alias of the above, Table 4-7 name
+mb$xonxoff	equ	00010000b	; XON/XOFF protocol currently enabled
+
+; BAUD RATE CODES -- CP/M 3 System Guide, Table 4-8.  These occupy the
+; low nibble of the baud byte; the high nibble is reserved and must be
+; zero.  Note the table stops at 19200: there is no encoding for the
+; 115200 baud that MOS uses on the Agon's GPIO serial port.
+
+baud$none	equ	0		; not applicable
+baud$50		equ	1
+baud$75		equ	2
+baud$110	equ	3
+baud$134	equ	4		; 134.5
+baud$150	equ	5
+baud$300	equ	6
+baud$600	equ	7
+baud$1200	equ	8
+baud$1800	equ	9
+baud$2400	equ	10
+baud$3600	equ	11
+baud$4800	equ	12
+baud$7200	equ	13
+baud$9600	equ	14
+baud$19200	equ	15
