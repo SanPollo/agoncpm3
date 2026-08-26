@@ -13,7 +13,7 @@ The supervisor is based, in part, on the [Agon CP/M 2.2](https://github.com/nihi
 * Bank switching between two eZ80 64K segments.
 * Field Installable Device Drivers (FIDs) for additional hardware support.
 * 60.76KB TPA.
-* Up to 8x 8MB hard drive images, using the `nihirash` [CP/M Tools](https://github.com/lipro-cpm4l/cpmtools) [definition](./definition) to maintain compatibility with [CP/M 2.2](https://github.com/nihirash/Agon-CPM2.2).
+* Up to eight 8MB hard drive images, using the `nihirash` [CP/M Tools](https://github.com/lipro-cpm4l/cpmtools) [definition](./definition) to maintain compatibility with [CP/M 2.2](https://github.com/nihirash/Agon-CPM2.2).
 * Time and date support.
 * 304KB RAM drive.
 
