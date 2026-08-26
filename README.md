@@ -57,7 +57,7 @@ By default, all FIDs from the `fid/` directory are loaded and, if none exist, lo
 
 There is an example FID, `fid/RAMD.FID`. You can test this by copying into the `fid/` subdirectory on your SD card where CP/M Plus is installed.
 
-For information about writing your own FIDs, (see here)[fid/FID.md].
+For information about writing your own FIDs, [see here](fid/FID.md).
 
 [Top](#cp-m-plus-for-agon-light)
 
