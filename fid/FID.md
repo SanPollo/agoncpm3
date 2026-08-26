@@ -359,31 +359,18 @@ bytes and fourteen bytes.
 
 ---
 
-## 8. Worked examples
+## RAMD Example
 
-**`upper.asm` → `UPPER.FID`** — a character device that folds console
-input to upper case. The model for a character driver.
-
-**`ramd.asm` → `RAMD.FID`** — a 32K RAM disc on K:, carved from the FID
+**`ramd.asm` → `RAMD.FID`** — a 32K RAM disc on `K:`, carved from the FID
 heap with `svc_alloc`. The model for a disc driver: a complete, working
-one small enough to read in a sitting. It arrives **formatted and
-empty**, so `DIR K:` reports no file and the drive is ready to be
+one small enough to read in a sitting. It arrives formatted and
+empty, so `DIR K:` reports `No File`, and the drive is ready to be
 written to.
 
-**`adecl.asm` → `ADECL.FID`** and **`dtest.asm` → `DTEST.FID`** — the
-edge-case tests of section 11, kept as a regression suite. `DTEST`
-exercises five cases in one load and prints a verdict for each;
-`ADECL` allocates and then declines, so that comparing the two "loaded
-at" addresses tests the reclaim path. They need a driver list naming
-`ADECL.FID` and then `DTEST.FID`, in that order and without globbing —
-**`RAMD.FID` must not be loaded alongside them**, because it would take
-one of the four DPB slots and move the exhaustion boundary.
-`check_dtest.py` model-checks them on the host.
-
-`RAMD` makes no MOS calls, needs no image format and does not touch M:,
+`RAMD` makes no MOS calls, needs no image format, and does not touch `M:`,
 so nothing in it distracts from the interface it demonstrates. It also
 exercises the branch a card drive does not: `PSH`/`PHM` of 0 mean
-`drvnew_core` gives it no data deblocking buffer, as it does for M:.
+`drvnew_core` gives it no data deblocking buffer, as it does for `M:`.
 
 Its geometry, checked against the System Guide before it was written:
 
@@ -398,25 +385,11 @@ AL0=80h AL1=0  CKS=8000h  OFF=0  PSH=0  PHM=0
 - 32 directory entries = 1024 bytes = one block → AL0 = `80h`
 - DRM ≤ (BLS/32 × 16) − 1 = 511
 
-The disc arrives **formatted and not empty**. An empty directory is
-indistinguishable from a broken drive that happens to return `E5`, so
-the driver writes one real file into it at load time. `DIR` finding
-`README.TXT` and `TYPE` printing it exercise the DPH, the DPB, the block
-mapping and the no-deblocking-buffer branch in one go, and each failing
-points at a different stage.
-
 `ramd.asm` also carries a **`mod_end` guard**: if `svc_alloc` ever
 returns a block below the end of the module again, the driver declines
 and says so instead of destroying the system. Six instructions.
 
----
-
-## 9. Diagnostics
-
-There is no eZ80 emulator available, so supervisor and driver code
-cannot be executed before it reaches hardware. Two compile-time switches
-exist, both currently **0**, and with them off not one byte remains —
-verified by assembling both ways and comparing the output.
+### Diagnostics
 
 - **`FIDDIAG`** in `cpm3.asm` — traces drive hooking and dispatch:
   `FID: drive K dpb 0/4 ok`, `FID: io K0`.
@@ -425,31 +398,13 @@ verified by assembling both ways and comparing the output.
   `RD4`, `RD5`. Each is printed *after* the step it names, so the last
   marker on screen is the last step that worked.
 
-Both sets of helpers preserve every register **and the flags**, so a
+Both sets of helpers preserve every register and the flags, so a
 marker can sit between a computation and its use without changing what
-is being measured. A print inserted between setting up registers and
-using them silently corrupted the comparison it was reporting on once,
-and produced confidently wrong output for a whole session.
-
-Two model checks run on the host, and neither needs hardware:
-
-- **`check_ramd.py`** reproduces the driver's format routine and read
-  path in Python, then applies CP/M 3's own directory rules to the
-  result — geometry against the System Guide tables, `rd_addr`
-  exhaustively over all 256 records, the directory walk the BDOS
-  performs, and that every one of the 256 records reads back as `E5`
-  so a short fill cannot pass unnoticed.
-- **`check_fidheap.py`** models the loader's heap ordering and checks
-  that a block returned by `svc_alloc` never overlaps the module that
-  asked for it, nor any module already resident.
-
-`verify_sys.py` reconstructs bank 0 from a generated `cpm3.sys` exactly
-as `load_system` does and reads the structures out, so two builds can be
-compared by what they mean rather than by raw bytes.
+is being measured.
 
 ---
 
-## 10. Building
+## Building
 
 ```
 ez80asm cpm3.asm -l -s
@@ -484,58 +439,3 @@ mismatched pair is not detected and will not behave.
   failures, and a missing input file, **without aborting** — a missing
   `BNKBDOS3.SPR` produces a 256-byte `CPM3.SYS` and a cheerful success
   message.
-
----
-
-## 11. State of testing
-
-Confirmed on hardware:
-
-| Exercised by | What it proves |
-|---|---|
-| `UPPER.FID` loading | a character driver adding a device |
-| `RAMD.FID` loading, drive K: | `svc_dhook` at an explicit letter; the DPB pool; `drvnew_core` reached from segment `$04` |
-| `DIR`, `TYPE README.TXT` | `login`, `init`, and the **read** path — DPH, DPB, block mapping, and the no-deblocking-buffer branch |
-| `ERA README.TXT` | the **write** path — `fid$write`, `g$fiddio`, `dev_write` — on a directory sector |
-| `PIP K:=C:TE.COM` | writes to **data** blocks, not just the directory: block allocation, a new directory entry, multiple records, and a transfer with a card drive as the source |
-| running `TE.COM` from K: | the CCP loading a program from a FID drive, and — because the TPA is in bank 1 — **`bank_to_seg` resolving a DMA bank other than 0** |
-| C:–J: and M: throughout | the existing drives are unaffected |
-
-That last row matters more than it looks. Every earlier test transferred
-into directory buffers, which live in bank 0, so the DMA address needed
-no real translation. Loading a program into the TPA writes into bank 1,
-so the supervisor's bank resolution and the driver's use of a finished
-24-bit address are both now proven. `PIP` is itself a transient running
-in bank 1, so the BDOS was reading the drive's DPB out of common memory
-from the far bank while it worked — the exact case section 6.1 exists
-for.
-
-If you returned to the `K>` prompt after `TE.COM`, warm boot is covered
-too: BOOT calls every drive's `init`, including K:'s.
-
-### Edge cases
-
-All confirmed on hardware, in one boot, using `adecl.asm` and
-`dtest.asm` with a hand-written `FIDCONF.INI` in place of the usual
-driver list — naming `ADECL.FID` and then `DTEST.FID` explicitly, in
-that order, with `RAMD.FID` absent.
-
-| Case | Result |
-|---|---|
-| an occupied letter is refused with `DRV_BADPARM` | pass |
-| `$FF` picks the first free letter at or above the floor | pass — drives landed on **K, L, N, O**: A: and B: were left alone and M: was stepped over |
-| four FID drives coexist, one DPB slot each | pass |
-| each drive reaches its own disc through the **unit** field | pass — `DIR`, `TYPE` and `ERA` on all four, each showing and then removing its own `UNITn.TXT` |
-| a fifth drive is refused with `DRV_NODPB`, cleanly | pass |
-| a declined module's heap is reclaimed | pass — `ADECL` and `DTEST` both reported loading at `$04422A`, and `ADECL`'s allocation fell exactly at its own image end |
-
-The unit-routing case is the one with a silent failure mode: had the
-unit field been ignored, all four drives would have reached unit 0's
-disc and everything would still have looked correct. Four different
-filenames, each readable and erasable on its own drive, is the proof.
-
-`NDPBSLOT` is 4, and that is now demonstrably the binding limit on how
-many drives loadable drivers may add. Section 6.1 gives the cost of
-raising it: about twelve slots fit before the TPA moves.
-
-**Nothing on the disc-FID mechanism remains untested.**
