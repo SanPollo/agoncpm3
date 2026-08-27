@@ -16,8 +16,8 @@ Agon CP/M 3: Loadable Driver Mechanism
 6. [SVC Table](#svc-table)
 7. [Character Devices (svc_chook)](#character-devices-svc_chook)
 8. [Disc Drives (svc_dhook)](#disc-drives-svc_dhook)
-9. [The two descriptors](#the-two-descriptors)
-10. [Worked examples](#worked-examples)
+9. [The Two Descriptors](#the-two-descriptors)
+10. [Worked Examples](#worked-examples)
 11. [Diagnostics](#diagnostics)
 12. [Building](#building)
 
@@ -293,7 +293,7 @@ A driver must not format its medium in `init`. The kernel calls `init` from BOOT
 
 ---
 
-## The two descriptors
+## The Two Descriptors
 
 At `?init` the BIOS hands the supervisor a description of itself.
 
@@ -318,9 +318,7 @@ Both copy lengths in `_g_fidinit` must match the blocks they read - six bytes an
 
 ---
 
-## Worked examples
-
-`upper.asm` → `UPPER.FID` - a character device that folds console input to upper case. The model for a character driver.
+## Worked Examples
 
 `ramd.asm` → `RAMD.FID` - a 32K RAM disc on K:, carved from the FID heap with `svc_alloc`. The model for a disc driver: a complete, working one small enough to read in a sitting. It arrives formatted and empty, so `DIR K:` reports no file and the drive is ready to be written to.
 
