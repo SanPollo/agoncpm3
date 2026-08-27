@@ -106,6 +106,10 @@ $04452F-$04FFFF  FID Heap (47,825 bytes)
 
 The maximum size of `FID.INI` is 512 bytes, and anything past that limit will not be parsed. This should be enough, though, as wildcards are allowed.
 
+### Formatting Discs
+
+At the moment there is no command that will let you format the virtual hard discs, or the RAM drive. A blank [cpmX.dsk](./cpmX.dsk) exists as a workaround to the first issue, but the issue of reformatting the RAM drive is unresolved.
+
 ### RTC
 
 The clock is synced with the ESP's time when CP/M boots, and then maintains its own time. This is because, after entering terminal mode, it is not possible to retrieve the time again from the ESP without pausing the terminal.
