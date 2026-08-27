@@ -47,10 +47,9 @@ cseg	; The resident BDOS calls console I/O through intercept
 ; with spaces, a mode byte, then a baud rate byte.  A zero byte
 ; terminates the table.
 ;
-; This previously carried two trailing reserved bytes per entry,
-; which is wrong twice over.  The sample CHARIO listing in the
-; System Guide (Appendix I.2) uses eight, and more to the point
-; the kernel hard-codes the stride: coster in bioskrnl.asm does
+; The sample CHARIO listing in the System Guide (Appendix I.2)
+; uses eight, and the kernel hard-codes the stride: coster in
+; bioskrnl.asm does
 ;
 ;	 mov l,b / mvi h,0
 ;	 dad h / dad h / dad h		(device number * 8)
@@ -58,17 +57,15 @@ cseg	; The resident BDOS calls console I/O through intercept
 ;
 ; (slashes above stand for the exclamation-mark separator used in
 ; the kernel source.  RMAC ends a comment at that character and
-; assembles whatever follows it,
-; so quoting kernel lines verbatim inside a comment is unsafe.)
+; assembles whatever follows it, so quoting kernel lines verbatim
+; inside a comment is unsafe.)
 ;
-; so a ten-byte stride would have made every device above 0 read
-; its mode byte out of the middle of another entry's name.  It
-; caused no trouble yet only because device 0 is at offset zero
-; either way.
+; A ten-byte stride would make every device above 0 read its mode
+; byte out of the middle of another entry's name.  Device 0 is at
+; offset zero either way, so the fault would not show there.
 ;
-; The mode bit VALUES were wrong too -- they had been written as
-; 80h/40h/20h/10h/08h, whereas Table 4-7 gives input as 01h and
-; output as 02h.  They now come from modebaud.lib.
+; The mode bit values come from modebaud.lib: Table 4-7 gives
+; input as 01h and output as 02h.
 
 @ctbl:
 	db	'VDP   '		; device 0
@@ -134,7 +131,7 @@ fid$desc:
 
 
 	; agon$fidinit
-	;	Load and start the drivers named in FIDCONF.INI.  Called
+	;	Load and start the drivers named in FID.INI.  Called
 	;	from ?init, and returns the number installed in <A>.
 
 agon$fidinit:

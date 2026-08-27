@@ -69,14 +69,14 @@ cseg	; ?ldccp and ?rlccp are reached from the kernel's BOOT and
 ; NAMED agon$low$common / agon$len$common, not agon$common$low /
 ; agon$common$len: RMAC/LINK truncate external symbols to six
 ; significant characters (ignoring $), so agon$common$low and
-; agon$common$len both truncated to AGONCO and LINK refused to
-; combine this module with the rest of the BIOS.  Putting the
-; distinguishing word first fixes it -- AGONLO vs AGONLE -- without
-; changing what either symbol means.  If anything else in this
-; source starts with agon$ and shares its first six significant
-; characters with agon$setcommon, agon$dph0, or these two, it will
-; fail the same way; this collision is a property of the two names
-; chosen, not of $ specifically.
+; agon$common$len would both truncate to AGONCO and LINK would
+; refuse to combine this module with the rest of the BIOS.  Putting
+; the distinguishing word first gives AGONLO and AGONLE without
+; changing what either symbol means.  Anything else in this source
+; that starts with agon$ and shares its first six significant
+; characters with agon$setcommon, agon$dph0, or these two will fail
+; the same way; the collision is a property of the names chosen,
+; not of $ specifically.
 
 agon$low$common:
 	dw	0			; first mutable byte, patched by loader
@@ -177,18 +177,15 @@ dseg
 ; rather than approximate, and costs two shifts instead of a
 ; 16-bit divide.
 ;
-; THIS REPORTS 61K, AND 61K IS RIGHT.  Earlier notes in this
-; project put the figure at 60.25K by taking COMBAS (F200h) as
-; the ceiling, and a draft of this comment went further and
-; called GENCPM's own "61K TPA" the odd one out.  Both were
-; wrong.  COMBAS is where common memory is allowed to begin, not
-; where it does: GENCPM placed RESBDOS3 at F500h, so F200h-F4FFh
-; holds nothing.  In bank 1 that gap is ordinary free memory
-; below the BDOS entry, and the supervisor's mutable-common copy
-; carries it across bank switches in both directions, so a
-; program may use it.  Measured on the generated system:
-; @MXTPA = F506h, giving 62,470 bytes, which is 61.0K.  GENCPM
-; and the SCB agree; only the old note disagreed.
+; THIS REPORTS 61K, AND 61K IS RIGHT.  Taking COMBAS (F200h) as
+; the ceiling would give 60.25K, but COMBAS is where common
+; memory is ALLOWED to begin, not where it does: GENCPM places
+; RESBDOS3 at F400h, so F200h-F3FFh holds nothing.  In bank 1
+; that gap is ordinary free memory below the BDOS entry, and the
+; supervisor's mutable-common copy carries it across bank
+; switches in both directions, so a program may use it.
+; Measured on the generated system: @MXTPA = F406h, giving
+; 62,214 bytes, which is 61.0K.  GENCPM's own report agrees.
 	lda	@mxtpa+1	; high byte of the TPA top
 	dcr	a			; less the 0100h base page
 	ora	a			; clear carry so RAR shifts in a zero

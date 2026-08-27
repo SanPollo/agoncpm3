@@ -19,9 +19,10 @@
 ;
 ;       python3 mkfid.py mydriver.asm MYDRIVER.FID
 ;
-;   Then name MYDRIVER.FID in FIDCONF.INI in the SD card root, one
-;   filename per line.  Blank lines and lines starting ';' or '#' are
-;   ignored, and load order is the order in the file.
+;   Then name MYDRIVER.FID in FID.INI, one filename per line.  Blank
+;   lines and lines starting ';' or '#' are ignored, and load order is
+;   the order in the file.  The name is relative, so FID.INI is looked
+;   for in the directory CP/M was started from.
 ;
 ; ENTRY
 ;   The loader calls the module at its base address, which the FIDHDR
@@ -35,14 +36,9 @@
 ;   releases both the image and anything the module allocated before
 ;   it decided to decline.
 ;
-;   NOTE FOR ANYONE WHO READ AN EARLIER VERSION OF THIS FILE.  The
-;   loader used to reclaim a declined module by NOT advancing its heap
-;   pointer until the entry routine had returned.  That was wrong: it
-;   left the pointer aimed at the module itself for the whole of the
-;   entry routine, so svc_alloc handed a driver its own code.  The
-;   pointer is now advanced BEFORE the module runs, so svc_alloc is
-;   safe to call from the entry routine, which is the only place most
-;   drivers will want to call it.
+;   The heap pointer is advanced past the module BEFORE the module
+;   runs, so svc_alloc is safe to call from the entry routine -- which
+;   is the only place most drivers will want to call it.
 ;
 ; ADDRESSES
 ;   References to SVC entries need no relocation -- the table is at a

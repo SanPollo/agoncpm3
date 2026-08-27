@@ -112,19 +112,17 @@ agonm$dph:
 	DPH	0,agonm$dpb,0,0		; no skew, permanent medium
 
 
-	cseg	; THE DPB MUST BE IN COMMON MEMORY, BUT NOT FOR THE REASON
-		; THIS COMMENT USED TO GIVE.
+	cseg	; THE DPB MUST BE IN COMMON MEMORY.
 		;
-		; It said "the resident BDOS reads it directly, from either
-		; bank".  It does not.  RESBDOS3 is built from resbdos.asm
-		; alone, which contains only function dispatch, the hash
-		; search and the move helpers, and never touches a DPB; the
-		; banked BDOS reads it at select time (bdos30.asm,
-		; selectdisk, "lhld dpbaddr ... call move") while running in
-		; bank 0, so bank 0 would have done.
+		; Not because the resident BDOS reads it: RESBDOS3 is built
+		; from resbdos.asm alone, which contains only function
+		; dispatch, the hash search and the move helpers, and never
+		; touches a DPB.  The banked BDOS reads it at select time
+		; (bdos30.asm, selectdisk, "lhld dpbaddr ... call move")
+		; while running in bank 0, so bank 0 would serve for that.
 		;
-		; The real constraint is BDOS function 31, which returns the
-		; DPB address to the CALLING PROGRAM:
+		; The constraint is BDOS function 31, which returns the DPB
+		; address to the CALLING PROGRAM:
 		;
 		;   func31: call curselect
 		;           lhld dpbaddr
@@ -134,8 +132,7 @@ agonm$dph:
 		; leave SHOW, and anything else that asks a drive for its
 		; parameters, reading whatever bank 1 holds at that address.
 		;
-		; The placement was right; the justification was not.  This
-		; matters now because the supervisor allocates every OTHER
+		; This matters because the supervisor allocates every OTHER
 		; drive structure in bank 0 -- see agon$newdrv below -- and
 		; the DPB is the one thing it cannot.
 
@@ -184,27 +181,25 @@ agonm$dph:
 	; CKS: a drive is declared permanently mounted by setting BIT 15,
 	; not by setting the field to zero.  System Guide: the checksum
 	; vector size is CKS AND 7FFFh, and bit 15 set means the drive is
-	; permanently mounted and no checksums are taken.  This field
-	; previously held 0, with a comment asserting that 0 meant
-	; permanent; 0 actually asks for a zero-length checksum vector on
-	; a REMOVABLE drive, which is a different thing.  8000h is the
-	; value that states the intent.
+	; permanently mounted and no checksums are taken.  A field of 0
+	; does NOT mean permanent: it asks for a zero-length checksum
+	; vector on a REMOVABLE drive, which is a different thing.
+	; 8000h is the value that states the intent.
 
-	; THERE IS NO RESERVED BYTE IN A CP/M 3 DPB.
-	; This block previously carried a spurious "db 0 ; (reserved)"
-	; after EXM, which shifted every field after it by one byte.
-	; DRI's own dpb.lit gives the offsets and leaves no room for it:
+	; THERE IS NO RESERVED BYTE IN A CP/M 3 DPB.  A spurious
+	; "db 0 ; (reserved)" after EXM would shift every field after it
+	; by one byte.  DRI's own dpb.lit gives the offsets and leaves no
+	; room for it:
 	;
 	;   spt$w 0, blkshf$b 2, blkmsk$b 3, extmsk$b 4, blkmax$w 5,
 	;   dirmax$w 7, dirblk$w 9, chksiz 11, offset$w 13
 	;
 	; (so PSH is at 15 and PHM at 16, and the DPB is 17 bytes.)
 	;
-	; With the extra byte the BDOS read DSM as 65280 rather than
-	; 2047 -- a 267 MB disk on an 8 MB image -- DRM as 65287 rather
-	; than 511, AL0 as 1, and PSH as 0.  GENCPM said as much and it
-	; went unread for several builds: it reported "The physical
-	; record size is 0080H" when this DPB asks for 512.
+	; With such a byte the BDOS reads DSM as 65280 rather than 2047
+	; -- a 267 MB disk on an 8 MB image -- DRM as 65287 rather than
+	; 511, AL0 as 1, and PSH as 0.  GENCPM reports it too, as "The
+	; physical record size is 0080H" when this DPB asks for 512.
 agon$dpb0:
 	dw	64			; SPT  128-byte records per track
 	db	6			; BSH  block shift, 8192-byte blocks
@@ -296,12 +291,13 @@ agonm$dpb:
 	; GENCPM owns all of it.  Hence a fixed pool, declared here at
 	; assembly time.
 	;
-	; COST, MEASURED: the resident BIOS CSEG is 810 bytes before
-	; this and 878 after, inside the same four-page SPR allocation,
-	; so nothing moves in the TPA.  There is room for about twelve
-	; slots in all before the boundary shifts and a page of TPA goes
-	; with it, so NDPBSLOT may be raised, but not without checking
-	; DRLINK's CODE SIZE and GENCPM's report afterwards.
+	; COST, MEASURED: the pool costs 68 bytes of the resident BIOS
+	; CSEG, which stands at 960 bytes of the 1,024 in its four-page
+	; SPR allocation, so nothing moves in the TPA.  The 64 bytes
+	; left over hold three more slots -- SEVEN in all -- before the
+	; boundary shifts and a page of TPA goes with it.  NDPBSLOT may
+	; be raised that far, but not without checking DRLINK's CODE
+	; SIZE and GENCPM's report afterwards.
 	;
 	; The supervisor is told the address and the slot count through
 	; fid$ddesc below; nothing here is hard-coded on the other side.
@@ -384,9 +380,9 @@ disk$io:
 	sta	p$dbnk
 	; ONE PHYSICAL SECTOR PER CALL.  @cnt IS NOT A LENGTH.
 	;
-	; This used to store @cnt here, and the supervisor multiplied the
-	; transfer length by it.  That is a misreading of @cnt and it was
-	; fatal, because @cnt is normally ZERO.
+	; Storing @cnt here and letting the supervisor multiply the
+	; transfer length by it is a misreading of @cnt, and a fatal one,
+	; because @cnt is normally ZERO.
 	;
 	; System Guide Table 2-5: SETTRK, SETSEC, SETDMA, SETBNK and
 	; READ/WRITE are "called for every read or write of a physical
@@ -456,7 +452,7 @@ io$dir:		ds	1	; 0 = read, 1 = write
 ;
 ; None of D: to J: is in @dtbl above, so GENCPM allocated nothing for
 ; any of them.  Each is built instead by the supervisor at ?init time
-; out of bank-0 memory the system generator was never given:
+; out of bank-0 memory that is not the system generator's to give:
 ; allocation vector, directory and data buffer control blocks, the
 ; buffers themselves, and the XDPH.
 ;
@@ -511,10 +507,9 @@ FIRSTAUTO equ	10		; first letter a LOADABLE DRIVER may be
 				; supervisor decides a letter is free by
 				; finding a zero @dtbl entry, and A: and B:
 				; ARE zero -- they are held back for floppies
-				; by intention, and that intention lived only
-				; in the comment above until now.  Without a
-				; floor, the first driver to ask for any free
-				; drive would silently be handed A:.
+				; by intention.  Without a floor, the first
+				; driver to ask for any free drive would
+				; silently be handed A:.
 				;
 				; A driver that genuinely wants A: -- a real
 				; floppy driver -- still may: it asks for the
@@ -535,12 +530,12 @@ FIRSTAUTO equ	10		; first letter a LOADABLE DRIVER may be
 				; J:), but only ONE IS OPEN at a time: the
 				; supervisor opens on demand and closes on a
 				; drive change.  There is no handle array and
-				; no relation to MOS_maxOpenFiles any more --
-				; holding a handle per drive is exactly what
-				; exhausted MOS's eight and left none for the
-				; FID loader.  NDRIVES in cpm3.asm is now just
-				; the range of unit numbers drv_open accepts,
-				; and must cover unit 9.
+				; no relation to MOS_maxOpenFiles: holding a
+				; handle per drive would exhaust MOS's eight
+				; and leave none for the FID loader.  NDRIVES
+				; in cpm3.asm is just the range of unit
+				; numbers drv_open accepts, and must cover
+				; unit 9.
 
 
 	; agon$newdrv
@@ -556,15 +551,13 @@ FIRSTAUTO equ	10		; first letter a LOADABLE DRIVER may be
 	;	no image is an ordinary configuration, not a fault.
 
 agon$newdrv:
-	; NO HANDLE RESERVATION HERE ANY MORE.
+	; NO HANDLE RESERVATION IS NEEDED HERE.
 	;
-	; This used to open C: first, so that the boot drive kept a MOS
-	; file handle if the others took them all.  The supervisor now
-	; holds ONE image open at a time and opens on demand, so there
-	; is nothing to run out of and nothing to reserve.  The reason
-	; the reservation existed -- eight drives against MOS's eight
-	; open files -- is exactly the fault that forced the change: it
-	; left no handle for the FID loader to open FIDCONF.INI with.
+	; The supervisor holds ONE image open at a time and opens on
+	; demand, so there is nothing to run out of and nothing to
+	; reserve.  Eight drives each holding a handle would exhaust
+	; MOS's eight open files and leave none for the FID loader to
+	; open FID.INI with.
 
 	mvi	b,FIRSTDYN		; first dynamic drive, D:
 	mvi	c,1			; drives present: the boot drive
@@ -819,10 +812,9 @@ fid$io:
 	lda	@dbnk
 	sta	fp$dbnk
 	; One record per call.  @cnt IS NOT A LENGTH -- see the long
-	; note in disk$io above, which cost a boot to establish.  It is
-	; declared "db 0" in bioskrnl.asm and the BDOS never calls
-	; MULTIO before directory I/O, so storing it here would ask for
-	; a transfer of zero records.
+	; note in disk$io above.  It is declared "db 0" in bioskrnl.asm
+	; and the BDOS never calls MULTIO before directory I/O, so
+	; storing it here would ask for a transfer of zero records.
 	mvi	a,1
 	sta	fp$cnt
 

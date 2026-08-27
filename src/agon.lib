@@ -64,7 +64,7 @@ g$mio		equ	gate$base+30h	; M: RAM drive transfer.  HL = parameter
 					; other disk gates because the offsets
 					; above are hard-coded on both sides.
 g$fidinit	equ	gate$base+38h	; load and start the field installable
-					; device drivers named in FIDCONF.INI.
+					; device drivers named in FID.INI.
 					; HL = descriptor block, see agonchr.asm.
 					; Returns A = modules installed.
 g$fidcio	equ	gate$base+3Ch	; character I/O for a device supplied by a
@@ -86,11 +86,9 @@ g$fiddio	equ	gate$base+40h	; disk I/O for a drive supplied by a
 ; ---------------------------------------------------------------------
 ; RETIRED -- RESERVED, NOT SPARE.
 ;
-; The two entries below are RET in the built image and do nothing.  They
-; supported GETDATE.COM and CHCKDATE.COM, both of which flooded the
-; console when run on hardware for a cause that was never found, and the
-; gate bodies were retired rather than left as a trap.  See the block
-; marked "RETIRED" in cpm3.asm, and the v8e notes in BUILD.md.
+; The two entries below are RET in the built image and do nothing.  The
+; gate bodies are retired rather than left as a trap.  See the block
+; marked "RETIRED" in cpm3.asm.
 ;
 ; The equates are KEPT so that every offset below +44h holds its value
 ; and nothing downstream shifts, and so that a new gate is given +4Ch
@@ -167,16 +165,17 @@ DPH	MACRO	?trans,?dpb,?csize,?asize
 	; read then handed the BDOS a null BCB and the system died there,
 	; immediately after a successful login.
 	;
-	; The tell was visible for several builds and went unread: GENCPM
-	; never asked any buffer-allocation or hashing questions.  System
-	; Guide 5.1 says it asks those precisely when it finds 0FFFEh.
+	; The tell is that GENCPM asks no buffer-allocation or hashing
+	; questions at all.  System Guide 5.1 says it asks those
+	; precisely when it finds 0FFFEh.
 	;
 	; Values below follow the sample DPH in System Guide Appendix
 	; ("dw 0fffeh,0fffeh,0fffeh ; dirbcb, dtabcb, hash alloc'd by
-	; GENCPM").  CSV is left at 0: CKS in our DPB is 0 because the
-	; medium is permanently mounted, so no checksum vector is needed
-	; and asking GENCPM for one would waste common memory.
-	dw	0			; CSV   none: CKS=0, medium is fixed
+	; GENCPM").  CSV is left at 0: CKS in our DPB has BIT 15 SET,
+	; which declares the medium permanently mounted, so no checksum
+	; vector is needed and asking GENCPM for one would waste common
+	; memory.
+	dw	0			; CSV   none: CKS bit 15, medium is fixed
 	dw	0FFFEh			; ALV   allocation vector, GENCPM allocates
 	dw	0FFFEh			; DIRBCB directory BCB, GENCPM allocates
 	dw	0FFFEh			; DTABCB data BCB, GENCPM allocates

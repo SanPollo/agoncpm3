@@ -121,9 +121,9 @@ def find_fixups(lo, hi, base, delta):
     # Scan EVERY position, not only the differing ones.  A 24-bit address
     # that moves by a delta with zero low byte -- 4000h, say -- changes only
     # its middle byte, so the field can start one or two bytes before the
-    # first byte that differs.  Anchoring the scan on differing bytes misses
-    # exactly those, which is how the very first fixup in a module (the JP in
-    # the header, whose field starts at offset 1) came to be skipped.
+    # first byte that differs.  Anchoring the scan on differing bytes would
+    # miss exactly those, the first fixup in every module among them: the JP
+    # in the header, whose field starts at offset 1.
     for i in range(len(lo) - 2):
         if covered & {i, i + 1, i + 2}:
             continue

@@ -32,7 +32,7 @@
 ;
 ; Build:
 ;       python3 mkfid.py ramd.asm RAMD.FID
-; then name RAMD.FID in FIDCONF.INI on the SD card.
+; then name RAMD.FID in FID.INI, in the directory CP/M is started from.
 
                 include "fid.inc"
 
@@ -42,7 +42,7 @@
 ; ---------------------------------------------------------------------
 ; GEOMETRY
 ;
-; Checked against the System Guide before it was written, not after:
+; Checked against the System Guide:
 ;
 ;   BLS 1024        -> BSH 3, BLM 7            (Table 3-4)
 ;   BLS 1024, DSM<256 -> EXM 0                 (Table 3-5)
@@ -64,20 +64,19 @@ RD_SIZE:        equ     RD_SPT*RD_TRACKS*128    ; 32768
 RD_TRKLEN:      equ     RD_SPT*128      ; 4096
 RD_DRIVE:       equ     10              ; K:.  Asked for by name rather
                                         ; than with $FF so that the
-                                        ; drive letter in this comment,
-                                        ; the one in FIDCONF.INI and the
-                                        ; one on screen are the same.
+                                        ; drive letter in this comment
+                                        ; and the one on screen are the
+                                        ; same.
 
 ; --- DIAGNOSTICS -----------------------------------------------------
 ;
 ; Set to 0 and not one byte of the tracing remains.
 ;
-; These exist because there is no eZ80 emulator to run this driver in
-; before it reaches hardware, and because reading the source and
-; reasoning about it has already failed twice on this exact routine.
-; Each marker is printed AFTER the step it names has completed, so the
-; LAST MARKER ON SCREEN IS THE LAST STEP THAT WORKED and the fault is
-; in whatever comes next.
+; A driver can only be run on the machine itself, so the tracing is
+; built in rather than added when something fails.  Each marker is
+; printed AFTER the step it names has completed, so the LAST MARKER ON
+; SCREEN IS THE LAST STEP THAT WORKED and the fault is in whatever
+; comes next.
 ;
 ;   RD1     entered
 ;   RD2=    svc_alloc returned, followed by the address it gave
@@ -86,10 +85,8 @@ RD_DRIVE:       equ     10              ; K:.  Asked for by name rather
 ;   RD4     rd_format returned
 ;   RD5     svc_dhook returned without an error
 ;
-; The helpers preserve every register including flags, so they can be
-; dropped in anywhere without disturbing what they are measuring --
-; the trap that produced confidently wrong output on this project once
-; before.
+; The helpers preserve every register including the flags, so they can
+; be dropped in anywhere without disturbing what they are measuring.
 
 RDDIAG:         equ     0
 
@@ -123,19 +120,13 @@ fid_ems:
                 call    dg_hl
     endif
 
-                ; SAFETY CHECK, AND NOT A THEORETICAL ONE.
+                ; SAFETY CHECK.
                 ;
-                ; The first version of this driver was handed its own
-                ; code by svc_alloc, because the loader did not advance
-                ; its heap pointer until after the entry routine
-                ; returned.  rd_format then filled 32K with E5 starting
-                ; at this module's first byte, overwrote the LDIR that
-                ; was doing it, and took the machine down with it.
-                ;
-                ; The loader is fixed.  This turns a repeat of that
-                ; fault into a driver that declines and says so, which
-                ; costs six instructions and one boot instead of a
-                ; hardware round trip.
+                ; A driver handed a block that overlaps its own image
+                ; would fill 32K with E5 starting inside itself,
+                ; overwriting the LDIR doing the filling and taking the
+                ; machine with it.  Six instructions turn that into a
+                ; driver that declines and says so.
                 push    hl
                 ld      de, mod_end
                 or      a

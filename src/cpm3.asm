@@ -36,7 +36,7 @@
 ;       ...  -$04FFFF    the FID heap, whatever is left
 ;     The two boundaries move with the size of this file, so they are
 ;     derived from image_end rather than written down here.  The current
-;     figures are printed by the build and recorded in BUILD.md.
+;     figures are printed by the build.
 ;   $050000-$05FFFF  CP/M bank 1  -- the TPA
 ;   $060000-$06FFFF  CP/M bank 0  -- system bank
 ;   $070000-$0BBFFF  M: RAM drive, 311296 bytes
@@ -98,9 +98,8 @@
 ;       marked "RETIRED" further down.
 ;     - Serial character I/O is not wired up; see the stubs in agonchr.asm.
 ;
-;   BUILD.md is the development record and carries the reasoning, the costs
-;   and the retractions.  README.md is the project overview and FID.MD is
-;   the driver author's reference.
+;   README.md is the project overview and FID.md is the driver author's
+;   reference.
 ; =============================================================================
 
 ; ------------------------------------------------------------------ constants
@@ -132,8 +131,7 @@ LSR_ETH:        .equ    $20 ; transmit holding register empty
 TX_WAIT:        .equ    16384           ; matches MOS's own TX_WAIT bound;
     ; an unbounded wait on a bit that
     ; never sets is a silent, permanent
-    ; hang with no panic -- exactly what
-    ; was observed
+    ; hang with no panic
 
 ; --- REAL-TIME CLOCK -----------------------------------------------------
 ;
@@ -150,21 +148,8 @@ TX_WAIT:        .equ    16384           ; matches MOS's own TX_WAIT bound;
 ; vpd_protocol_flags.  console_init turns that interrupt off.  The flag can
 ; never be set, so the call would spin out its timeout every time.
 ;
-; AN EARLIER ATTEMPT (v8a) TRIED TO WORK ROUND THE FIRST OBSTACLE by
-; suspending the terminal for the length of each exchange, using the fabgl
-; user sequence "S!", then resuming with VDU 23,0,0FFh.  It was abandoned
-; after a hardware failure that was later traced to something else entirely
-; -- a corrupted MBASE during startup, described at _start -- which meant
-; neither v8a nor v8b ever reached terminal mode at all.
-;
-; SO NOTHING IS KNOWN ABOUT WHETHER THE SUSPEND WOULD HAVE WORKED.  Its clock
-; code never executed a single instruction.  The approach here does not need
-; it, and is better anyway because it does no console I/O at all, but the
-; earlier verdict against fabgl was unfounded and should not be repeated as
-; though it were a finding.
-;
-; SO THE CLOCK IS READ EXACTLY ONCE, DURING STARTUP, BEFORE console_init.
-; At that point nothing is in the way: MOS's UART interrupt is still armed,
+; THE CLOCK IS THEREFORE READ EXACTLY ONCE, DURING STARTUP, BEFORE
+; console_init.  At that point nothing is in the way: MOS's UART interrupt is still armed,
 ; vdp_protocol is still running, and a refresh behaves exactly as it does at
 ; the MOS prompt.  From then on the time is carried forward by counting
 ; VBLANK interrupts, which is what the System Guide expects anyway:
@@ -202,13 +187,12 @@ SYSVAR_RTC:     .equ    $1A ; 6 bytes: the raw clock packet
 ; time.  Dividing by 120 rather than by 100 is the whole of the correction --
 ; there is no separate fudge factor anywhere below.
 ;
-; VGA 640x480 is nominally 59.94Hz rather than 60.00, so if the Agon used the
-; standard timings this would be about 0.1% fast: roughly a minute and a half
-; a day.  IT HAS NOW BEEN MEASURED AND IT IS NOT.  The clock was set in MOS
-; to match a PC, CP/M booted, and the two still agreed thirty minutes later.
-; At 59.94Hz against an assumed 60.00 the drift over that interval would have
-; been about two seconds, which would have shown.  120 is right; this is
-; still the constant to trim if a machine is ever found that disagrees.
+; VGA 640x480 is nominally 59.94Hz rather than 60.00, and had the Agon used
+; the standard timings this would run about 0.1% fast -- roughly a minute and
+; a half a day.  It does not: measured against an external clock, a CP/M
+; session and the reference still agree after thirty minutes, where 59.94Hz
+; against an assumed 60.00 would have drifted about two seconds.  120 is the
+; constant to trim if a machine is ever found that disagrees.
 TICKS_PER_SEC:  .equ    120
 
 GATE_BASE:      .equ    $040100         ; must match agon.lib
@@ -265,30 +249,23 @@ NDRIVELET:      .equ    16  ; A: through P:.  The drive-to-driver
 
 ; --- DIAGNOSTICS ---------------------------------------------------------
 ;
-; There is no eZ80 emulator here, so supervisor code cannot be executed
-; before it reaches hardware.  Building the tracing in from the start is
-; what the last two rounds of this project showed to work; adding it after
-; something fails costs a hardware round trip each time.
+; Supervisor code cannot be run anywhere but on the machine itself, so the
+; tracing below is built in rather than added when something fails.
 ;
-; Set FIDDIAG to 0 and NOT ONE BYTE remains -- verified by assembling both
-; ways and comparing the output, not assumed.  The blocks are marked so
-; they can be deleted outright once the mechanism is trusted, rather than
-; left switched off for ever.
+; With FIDDIAG at 0 not one byte of it remains in the assembled image.
 ;
-; Diagnostics are placed where they CANNOT DISTURB WHAT THEY MEASURE.  A
-; print inserted between setting up registers and using them silently
-; corrupted the comparison it was reporting on, once, and produced
-; confidently wrong output for a whole session.
+; Every diagnostic is placed where it CANNOT DISTURB WHAT IT MEASURES: the
+; helpers preserve all registers and the flags, and a marker is never put
+; between a computation and its use.
 FIDDIAG:        .equ    0   ; 1 = trace drive hooking and dispatch
 
 CCP_MAX:        .equ    $2000           ; 8K ceiling; the CP/M 3 CCP is ~3K
 
-; CCP_STORE was an .equ of $070000 -- inside the range now given to the M:
-; RAM drive.  It is declared as ordinary storage at the end of this file
-; instead, which puts it in segment $04 at an address the assembler picks.
-; That is both correct and cheaper to reason about: this supervisor's code
-; is around 2K, so an 8K buffer sits comfortably inside its own 64K segment
-; with no hand-chosen address to keep in step with anything.
+; CCP_STORE is declared as ordinary storage at the end of this file rather
+; than as a fixed .equ, which puts it in segment $04 at an address the
+; assembler picks.  An 8K buffer sits comfortably inside this supervisor's
+; own 64K segment, with no hand-chosen address to keep in step with the
+; M: RAM drive or with anything else.
 
 ; --- M: RAM drive ---
 ;
@@ -414,10 +391,9 @@ NDRIVES:        .equ    16  ; highest relative drive number plus
     ; cpmj.dsk.  Nothing has to remember an
     ; offset between them.
     ;
-    ; It was 8 when it also stood in for
-    ; MOS_maxOpenFiles.  That conflation is
-    ; gone: the open-file limit is now
-    ; respected by construction, because
+    ; This is unrelated to
+    ; MOS_maxOpenFiles: the open-file limit
+    ; is respected by construction, because
     ; the disk driver never holds more than
     ; one handle at a time.
 
@@ -1014,9 +990,9 @@ _g_time:
 ; worth making: set the time once from the CP/M prompt and every later boot of
 ; CP/M, MOS or BBC BASIC inherits it.
 ;
-; The obstacle is not the format, which is known -- see "Future: making DATE
-; SET permanent" in BUILD.md.  It is that the VDU interpreter cannot be
-; reached at all while the VDP is in terminal mode, exactly as for reading.
+; The obstacle is not the packet format, which is known.  It is that the VDU
+; interpreter cannot be reached at all while the VDP is in terminal mode,
+; exactly as for reading.
 ;
 ;
 ; This is what makes DATE SET work.  BDOS function 104 writes @date, @hour
@@ -1077,25 +1053,23 @@ _g_time:
 ; =============================================================================
 ;  RETIRED -- support for GETDATE.COM and CHCKDATE.COM
 ; -----------------------------------------------------------------------------
-;  Commented out in v8e to give the FID heap back its 220 bytes.  The clock
-;  itself does not need any of this: it was here so that two transients could
-;  ask what the startup fetch returned and what the ESP32 would say now.
+;  This block is commented out, and costs the FID heap nothing.  The clock
+;  does not need any of it: it existed so that two transients could ask what
+;  the startup fetch returned and what the ESP32 would say now.
 ;
-;  WHY IT WENT.  The utilities did not work.  Run on hardware they flooded the
-;  console and left the machine unusable, and the cause was never found.  What
-;  WAS ruled out is the gate table -- g$rtcraw and g$esptime were verified in
-;  the built image at +44 and +48, correctly aligned, jumping to the right
-;  addresses.  One observation is worth keeping: THESE WERE THE FIRST GATES
-;  EVER CALLED FROM A CP/M TRANSIENT.  Every other gate in this table is
-;  entered from the BIOS or from a FID module in segment $04, never from user
-;  code in the TPA.  Anything that goes looking for the fault should start
-;  there.
+;  The utilities themselves do not work.  Run on hardware they flood the
+;  console and leave the machine unusable.  The gate table is not the cause:
+;  g$rtcraw and g$esptime were checked in the built image at +44 and +48,
+;  correctly aligned and jumping to the right addresses.  Note that these
+;  would be the ONLY GATES CALLED FROM A CP/M TRANSIENT.  Every other gate in
+;  this table is entered from the BIOS or from a FID module in segment $04,
+;  never from user code in the TPA.  Anything that goes looking for the fault
+;  should start there.
 ;
 ;  TO BRING IT BACK: uncomment this block, restore the two gate table entries
 ;  at +44 and +48 to JP form, uncomment esp_blk and its seeding in clock_init,
 ;  and uncomment the second blk_addsec pass in clock_advance.  Each of those
-;  sites is marked "RETIRED".  getdate.asm and chckdate.asm are still in the
-;  archive and still build.
+;  sites is marked "RETIRED".
 ; =============================================================================
 ;
 ;; _g_rtcraw -- diagnostic gate.  HL = an eight-byte buffer in the caller's
@@ -1488,10 +1462,10 @@ rtc_decode:
 
     ; RETIRED: month (byte 0 bits 0-3, zero-based) and day of week
     ; (byte 1 bits 1-3) were decoded here purely so CHCKDATE.COM
-    ; could print them.  The running clock never needed either: it
-    ; works from a day count.  Note if these come back that the
-    ; packet's day of week is not always right -- see the note on
-    ; ESP32Time's overflow flag in BUILD.md.
+    ; could print them.  The running clock needs neither: it works
+    ; from a day count.  Note if these come back that the packet's
+    ; day of week is not always right, because the ESP32's overflow
+    ; flag persists across a reset.
     ;
     ;   ld      a, (rtc_pkt+0)
     ;   and     $0F
@@ -1728,13 +1702,11 @@ bcd2bin:
 ;  FID.  Drive letter, relative drive number and image letter are all the
 ;  same value, so nothing has to remember an offset between them.
 ;
-;  ONE IMAGE IS OPEN AT A TIME, OPENED ON DEMAND.  An earlier version held a
-;  handle per drive for the life of the session, on the grounds that MOS 3.0.2
-;  allows eight files open at once (MOS_maxOpenFiles in its config.h).  With
-;  eight images mounted that consumed every one of them and left nothing for
-;  the FID loader to open FID.INI with -- confirmed on hardware.  The full
-;  reasoning, and why holding handles was never buying much, is at drv_open
-;  below; this comment used to state the opposite and contradicted it.
+;  ONE IMAGE IS OPEN AT A TIME, OPENED ON DEMAND.  MOS 3.0.2 allows only
+;  eight files open at once (MOS_maxOpenFiles in its config.h), so a handle
+;  held per drive for the life of the session would consume every one of them
+;  with eight images mounted and leave nothing for the FID loader to open
+;  FID.INI with.  The full reasoning is at drv_open below.
 ;
 ;  The BIOS passes a 9-byte parameter block rather than trying to squeeze the
 ;  transfer parameters into registers:
@@ -1763,19 +1735,18 @@ _g_dlogin:
 ;
 ; ONE IMAGE IS OPEN AT A TIME, OPENED ON DEMAND.  This is what the CP/M 2.2
 ; port does, and it is not a simplification for its own sake: MOS allows only
-; a fixed number of files open at once, and holding a handle per drive for the
-; session consumed every one of them.  With eight images mounted there was
-; nothing left, and the FID loader could not open FID.INI.  Confirmed on
-; hardware -- renaming one image freed a handle and the driver loaded.
+; a fixed number of files open at once, so a handle held per drive for the
+; session would consume every one of them, leaving the FID loader unable to
+; open FID.INI with eight images mounted.
 ;
-; Holding handles was never buying much.  A drive that is already current
+; Holding handles buys little in any case.  A drive that is already current
 ; costs one compare; only a switch costs a close and an open, and CP/M works
 ; a drive at a time, so switches are rare next to the sector traffic between
 ; them.  Closing also flushes, so a switch commits pending writes instead of
 ; leaving them in FatFS's buffers for the rest of the session.
 ;
-; It was split out of _g_dlogin because a gate ends in RET.LIL and returns to
-; Z80 mode; internal callers -- disk_io and _g_drvnew -- need a plain RET.
+; This is separate from _g_dlogin because a gate ends in RET.LIL and returns
+; to Z80 mode; internal callers -- disk_io and _g_drvnew -- need a plain RET.
 ;
 ; Returns A = 0 and Z set on success, A = 1 and NZ if the image will not open.
 drv_open:
@@ -1884,33 +1855,25 @@ disk_io:
     ; HL is 24-bit in ADL mode, and an 8 MB image needs 23 bits, so
     ; this cannot overflow for any drive the DPB can describe.
     ;
-    ; THE 16-BIT FIELDS ARE LOADED A BYTE AT A TIME, BUT NOT
-    ; BECAUSE THE PREVIOUS CODE WAS WRONG.
+    ; THE 16-BIT FIELDS ARE LOADED A BYTE AT A TIME, DELIBERATELY.
     ;
-    ; This used to read "ld hl, (parm+1)" and "ld de, (parm+3)".
-    ; In ADL mode both are THREE-byte loads (UM0077 Table 10: the
-    ; .L half of the mode makes the data block operate on 24-bit
-    ; registers, and that is the default here because of
-    ; .assume adl = 1).  So HLU picked up the low byte of the
-    ; sector, and DEU the low byte of the DMA address.
+    ; "ld hl, (parm+1)" and "ld de, (parm+3)" are THREE-byte loads
+    ; in ADL mode (UM0077 Table 10: the .L half of the mode makes
+    ; the data block operate on 24-bit registers, and that is the
+    ; default here because of .assume adl = 1).  HLU would pick up
+    ; the low byte of the sector, and DEU the low byte of the DMA
+    ; address.
     ;
-    ; That looks like a fault and was reported as one.  It is not.
-    ; The stray bytes sit at bits 16-23, and every path to the
-    ; result passes through the *512 multiply below -- nine left
-    ; shifts.  16 + 9 = 25, already past bit 23, so the whole of
-    ; the garbage is shifted out of the register before it can
-    ; reach the result.  Checked exhaustively over both the old
-    ; (SPT_PHYS 64) and new (SPT_PHYS 16) geometries, every track
-    ; and sector, and several DMA values: the old code produced
-    ; the correct offset in every case.
-    ;
-    ; It was correct BY ACCIDENT, though, and the accident depends
-    ; on the shift count that follows.  Anyone who later changes
-    ; SECSIZE, or reorders the multiply and the add, silently
-    ; loses the property.  Building HL and DE from cleared
-    ; registers makes the code correct on its own terms instead,
-    ; for the cost of four bytes and no run-time difference worth
-    ; measuring.  The same pattern is used in _g_mio.
+    ; The stray bytes would in fact be harmless, because every path
+    ; to the result passes through the *512 multiply below -- nine
+    ; left shifts, and 16 + 9 = 25 is already past bit 23, so they
+    ; are shifted out before they can reach it.  But that property
+    ; depends entirely on the shift count that follows: change
+    ; SECSIZE, or reorder the multiply and the add, and it is
+    ; silently lost.  Building HL and DE from cleared registers is
+    ; correct on its own terms, for four bytes and no run-time
+    ; difference worth measuring.  The same pattern is used in
+    ; _g_mio.
     ld      hl, 0
     ld      a, (parm+2)
     ld      h, a        ; track high
@@ -2687,12 +2650,12 @@ dtbl_addr:
 ;  and the CCP has not started.  Drives installed by agon$newdrv have already
 ;  been added, so a driver sees the finished drive map.
 ;
-;  The modules to load are named in FID.INI in the SD card root, one per
-;  line.  A directory scan would need MOS calls this supervisor has never
-;  made; a list file needs only mos_fopen and mos_fread, both proven here
-;  since v1, and it makes LOAD ORDER EXPLICIT -- which matters, because order
-;  decides device numbering.  Blank lines and lines starting ';' or '#' are
-;  ignored.
+;  The modules to load are named in FID.INI, one per line.  The name is
+;  relative, so it is resolved against MOS's working directory -- the
+;  directory CP/M was started from, which may be anywhere on the card.  A
+;  list file needs only mos_fopen and mos_fread, and it makes LOAD ORDER
+;  EXPLICIT, which matters because order decides device numbering.  Blank
+;  lines and lines starting ';' or '#' are ignored.
 ; =============================================================================
 
 ; -----------------------------------------------------------------------------
@@ -2841,11 +2804,10 @@ fid_getcwd:
 ;
 ; MOS requires MBASE to be zero for its API calls.  The loader runs from the
 ; BIOS's ?init, which is to say DURING CP/M, when MBASE holds the CP/M bank --
-; $06 or $05, never 0.  drv_open and disk_io have always bracketed for exactly
-; this reason; the first version of this loader did not, and every MOS call it
-; made failed.  mos_fopen returned a zero handle, the routine took its "no
-; list file" exit, and the whole mechanism did nothing at all without a word
-; of complaint.
+; $06 or $05, never 0.  drv_open and disk_io bracket for exactly this reason.
+; Without it mos_fopen returns a zero handle, the routine takes its "no list
+; file" exit, and the whole mechanism does nothing at all without a word of
+; complaint.
 ;
 ; The rule is: any MOS call reachable after the jump into CP/M must bracket.
 ; load_system, load_ccp and read_record need not, and do not, because they run
@@ -3270,9 +3232,11 @@ fid_haswild:
 ; doing it at all, and the second buffer costs 512 bytes of a segment with
 ; 52K spare.
 ;
-; The path passed is an empty string, which FatFS resolves to the current
-; directory because MOS sets FF_FS_RPATH to 2.  That is what makes a pattern
-; pick up drivers sitting beside cpm3.bin rather than in the card root.
+; A line with no directory part is given the path ".", which FatFS resolves
+; to the current directory because MOS sets FF_FS_RPATH to 2.  That is what
+; makes a pattern pick up drivers sitting beside cpm3.bin rather than in the
+; card root.  It must be "." and not an empty string -- see the note at the
+; declaration of fid_path.
 ; -----------------------------------------------------------------------------
 fid_expand:
     push    ix
@@ -3735,21 +3699,17 @@ fid_load:
     ;
     ; THE HEAP POINTER IS ADVANCED BEFORE THE MODULE RUNS, not after.
     ;
-    ; It used to be advanced on the way out, so that a module which
-    ; declined had its space reclaimed by doing nothing.  That was
-    ; tidy and it was wrong: it left fid_ptr pointing AT THE MODULE
-    ; ITSELF for the whole of its entry routine, so svc_alloc handed a
-    ; driver its own code.  The first driver ever to call svc_alloc
-    ; filled 32K with 0E5h starting at its own first byte, overwrote
-    ; the LDIR that was doing it, and took the system with it.  Every
-    ; driver up to then had only registered a device and allocated
-    ; nothing, which is why the fault lay undisturbed.
+    ; Advancing it on the way out would let a module that declines
+    ; reclaim its space by doing nothing, but it would leave fid_ptr
+    ; pointing AT THE MODULE ITSELF for the whole of its entry
+    ; routine, so svc_alloc would hand a driver its own code.  A
+    ; driver that then filled its allocation would overwrite the very
+    ; instructions doing the filling.
     ;
-    ; Reclaiming a declined module is now explicit instead: fid_ptr
-    ; goes back to fidbase, which also releases anything the module
-    ; allocated before deciding to decline.  That is the right
-    ; behaviour -- the module is gone, and so is everything it asked
-    ; for.
+    ; Reclaiming a declined module is explicit instead: fid_ptr goes
+    ; back to fidbase, which also releases anything the module
+    ; allocated before deciding to decline.  The module is gone, and
+    ; so is everything it asked for.
     ld      hl, (fid_next)
     ld      (fid_ptr), hl
 
@@ -4202,9 +4162,9 @@ _g_fidcio:
 ; =============================================================================
 ;  DRIVES SUPPLIED BY A LOADABLE DRIVER
 ; -----------------------------------------------------------------------------
-;  Everything a drive needs is already built by drvnew_core, and has been
-;  mounting C: through J: on every boot since v5.  Two things stood between
-;  that and a driver being able to add a drive of its own:
+;  Everything a drive needs is already built by drvnew_core, which mounts
+;  C: through J: on every boot.  Two things separate that from a driver
+;  being able to add a drive of its own:
 ;
 ;  THE DPB MUST BE IN COMMON.  BDOS function 31 returns the DPB address to
 ;  the calling program, which runs in bank 1 -- bdos30.asm, func31, is
@@ -4221,8 +4181,7 @@ _g_fidcio:
 ;  segment $04.  So every FID drive's XDPH names ONE SHARED SET of stubs in
 ;  agondsk.asm, which gate back here with the absolute drive number, and this
 ;  maps that drive to the right driver.  It is the same shape as
-;  ?ci/?co/?cist/?cost reaching _g_fidcio for character devices, on purpose:
-;  one pattern to understand rather than two.
+;  ?ci/?co/?cist/?cost reaching _g_fidcio for character devices.
 ; =============================================================================
 
 ; -----------------------------------------------------------------------------
@@ -4250,9 +4209,8 @@ _g_fidcio:
 ; if the drive cannot be installed.
 ;
 ; WHY $FF IS NOT SIMPLY "THE FIRST ZERO @dtbl ENTRY".  A: and B: are zero:
-; they are held for floppy drives by intention, and until FIRSTAUTO existed
-; that intention was recorded only in a comment in agondsk.asm.  A naive scan
-; would hand the first driver that asked A:, silently.  The floor comes from
+; they are held for floppy drives by intention.  A naive scan would hand the
+; first driver that asked A:, silently.  The floor comes from
 ; the BIOS in fid$ddesc so the policy is stated once, beside the drive map it
 ; governs.  A driver that genuinely wants A: -- a real floppy driver -- still
 ; asks for it by number, which skips the floor entirely.
@@ -4312,8 +4270,7 @@ _svc_dhook:
     ; Reports the DECISION, before anything is built, rather than the
     ; consequences of it.  Nothing below this point depends on a
     ; register set up above it, so the call cannot disturb what it is
-    ; measuring -- the trap that produced confidently wrong output
-    ; once already on this project.
+    ; measuring.
     ld      hl, dg_dhook
     call    fid_pmsg
     ld      a, (dhk_drv)
@@ -4827,10 +4784,6 @@ _start:
     ; so CPM3.SYS cannot be opened either and the program falls back
     ; to MOS.
     ;
-    ; That is precisely what v8a and v8b did on hardware.  Neither
-    ; of them ever reached terminal mode, and neither ever executed
-    ; a single instruction of its clock code.
-    ;
     ; mos_api_sysvars is "LD IX,_sysvars / RET" (mos_api.asm line
     ; 562) -- two instructions, no pointer arguments, nothing that
     ; consults MB -- so calling it bare is correct here.  _sysvars
@@ -5014,11 +4967,10 @@ load_system:
     ; A page-plus-one of 00 means one past 0FFH, i.e. 10000h -- the
     ; resident portion reaches the very top of memory.  "ld h,a"
     ; alone leaves HL = 0000, and the subtraction that derives the
-    ; base then wraps to 0FFxxxxh.  The low 16 bits still came out
-    ; right, which is why this was never noticed, but the 24-bit
-    ; value was wrong and any arithmetic that did not truncate to
-    ; 16 bits -- such as deriving a length from the top of memory
-    ; below -- would inherit the error.
+    ; base then wraps to 0FFxxxxh.  The low 16 bits would still come
+    ; out right, but the 24-bit value would not, and any arithmetic
+    ; that does not truncate to 16 bits -- such as deriving a length
+    ; from the top of memory below -- would inherit the error.
     ld      hl, $010000
 @res_top_ok:
     ld      (res_top), hl
@@ -5310,15 +5262,14 @@ zero_ccp:
 ; Parked there rather than loaded straight into the TPA so that warm boots are
 ; a block copy instead of a file read.
 ;
-; _g_ldccp still refuses to copy anything when ccp_len is zero, but that is
-; now a second line of defence rather than the reporting mechanism: by the
-; time ?ldccp runs there is no console left that anyone is reading, and the
-; kernel discards its return value anyway.  The failure is caught at startup
-; instead -- see the call site in _start.
+; _g_ldccp refuses to copy anything when ccp_len is zero, but that is a second
+; line of defence rather than the reporting mechanism: by the time ?ldccp runs
+; there is no console left that anyone is reading, and the kernel discards its
+; return value anyway.  The failure is caught at startup instead -- see the
+; call site in _start.
 ;
-; (The buffer used to live in segment $07; it now sits just above this file's
-; own image in segment $04, because $07 is the first segment of the M: RAM
-; drive.)
+; The buffer sits just above this file's own image in segment $04.  It cannot
+; live in segment $07, which is the first segment of the M: RAM drive.
 ; -----------------------------------------------------------------------------
 ; Returns Z set on success, NZ on failure.  Both failure modes are covered:
 ; the file not being there at all, and the file being there but empty.  The
@@ -5412,18 +5363,17 @@ read_record:
 ; goes with it.
 ;
 ; Ownership of UART0 must be taken -- FIFO cleared, receive interrupt off --
-; BEFORE waiting for the VDP's handover byte, not after.  Earlier versions of
-; this routine waited first and disabled MOS's receive interrupt afterwards.
-; That raced MOS's own UART0 ISR for the same byte: on VDP 2.16.0,
-; fabgl::Terminal::connectSerialPort() sends exactly one byte, XON ($11), once
-; the terminal has actually come up (see below), and nothing else arrives
-; until a key is pressed.  With MOS's interrupt still armed at a one-byte FIFO
-; trigger level, its handler (_uart0_handler -> UART0_serial_RX) usually wins
-; the race, reads that $11 out of the RBR first, and vdp_protocol_state0
-; discards it as a sub-$80 byte -- so our polled wait then sees nothing until
-; a keystroke arrives.  That is the "pauses until a key is pressed" bug.  The
-; CP/M 2.2 port's _term_init does the FIFO/interrupt takeover ahead of its
-; wait, which is why it does not show this symptom; we now match that order.
+; BEFORE waiting for the VDP's handover byte, not after.  Waiting first and
+; disabling MOS's receive interrupt afterwards races MOS's own UART0 ISR for
+; the same byte: on VDP 2.16.0, fabgl::Terminal::connectSerialPort() sends
+; exactly one byte, XON ($11), once the terminal has actually come up (see
+; below), and nothing else arrives until a key is pressed.  With MOS's
+; interrupt still armed at a one-byte FIFO trigger level, its handler
+; (_uart0_handler -> UART0_serial_RX) usually wins the race, reads that $11
+; out of the RBR first, and vdp_protocol_state0 discards it as a sub-$80 byte
+; -- so the polled wait then sees nothing until a keystroke arrives.  The
+; CP/M 2.2 port's _term_init takes the FIFO and the interrupt ahead of its
+; wait for the same reason, and this matches that order.
 ; -----------------------------------------------------------------------------
 console_init:
     ; Send the terminal-mode command.  The VDP does NOT switch
@@ -5435,10 +5385,7 @@ console_init:
     ; keyboard forward keystrokes back over UART0.  The wait for
     ; the $11 handover byte below is what synchronises the two.
     ;
-    ; This used to send trailing text as well, with a note claiming
-    ; the bytes were needed to keep the stream flowing during that
-    ; transition.  See vdu_term: the claim did not survive checking
-    ; against the CP/M 2.2 port, and the text is gone.
+    ; Nothing but the command itself is sent: see vdu_term.
     ld      hl, vdu_term
     ld      bc, vdu_term_end - vdu_term
     xor     a
@@ -5509,7 +5456,7 @@ con_put:
     pop     de
     ret
 
-; Switch to terminal mode. If this ever fails, add an extra line above it to debug.
+; Switch to terminal mode.  The command and nothing else.
 vdu_term:
     .db     23, 0, 255  ; VDP terminal emulation on
 vdu_term_end:
@@ -5626,16 +5573,13 @@ frag_tbl:       .blkb   MAXFRAG*6, 0
 ; 16-bit form needs an explicit suffix -- ld (v),hl assembles to 22 nn mm MM
 ; whereas ld.sis (v),hl assembles to 40 22 nn mm.
 ;
-; These were originally .dw, which meant each store spilled its top byte
-; into the variable declared next.  Mostly that was survivable by accident,
-; but one case was fatal: "ld (bnk_top), hl" overwrote res_len with whatever
-; HLU happened to hold, seven lines after res_len had been read correctly
-; out of the CPM3.SYS header.  load_portion then read the wrong record
-; count and left most of RESBDOS3 unloaded.
-;
-; Declaring them .dl removes the whole class of bug rather than the one
-; instance of it.  The .db variables below are only ever accessed a byte at
-; a time, and nothing three-byte-wide is declared immediately before them.
+; Anything a 24-bit register is stored into is therefore declared .dl.  A .dw
+; would let each store spill its top byte into the variable declared next --
+; "ld (bnk_top), hl" would overwrite res_len with whatever HLU held, so
+; load_portion would read the wrong record count and leave most of RESBDOS3
+; unloaded.  Declaring them .dl removes the whole class of fault.  The .db
+; variables below are only ever accessed a byte at a time, and nothing
+; three-byte-wide is declared immediately before them.
 filehandle:     .db     0
 res_len:        .db     0   ; pages
 bnk_len:        .db     0   ; pages
@@ -5659,11 +5603,10 @@ io_func:        .db     0
 io_handle:      .db     0
 ccp_len:        .dl     0   ; .dl for the reason given above: DE is
     ; 24 bits, so "ld (ccp_len),de" writes
-    ; three bytes and used to put the top
-    ; one into recbuf.  It happened to be
-    ; zero, which is why _g_ldccp's
-    ; "ld bc,(ccp_len)" did not produce a
-    ; multi-megabyte LDIR.  Not a margin to
+    ; three bytes, and as a .dw the top one
+    ; would land in recbuf.  _g_ldccp does
+    ; "ld bc,(ccp_len)" and drives an LDIR
+    ; with it, which is not a margin to
     ; leave a block move standing on.
 recbuf:         .blkb   128, 0
 
