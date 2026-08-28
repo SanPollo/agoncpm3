@@ -94,8 +94,6 @@
 ;       so it does not survive a reset.  See the note by the RTC section:
 ;       on a stock machine a reset clears the VDP's clock too, so there is
 ;       nothing to preserve until a battery backup module is fitted.
-;     - The two gates at +44 and +48 are RETIRED, not spare.  See the block
-;       marked "RETIRED" further down.
 ;     - Serial character I/O is not wired up; see the stubs in agonchr.asm.
 ;
 ;   README.md is the project overview and FID.md is the driver author's
@@ -438,13 +436,11 @@ g_fidinit:      jp      _g_fidinit      ; +38  HL = BIOS descriptor block
 g_fidcio:       jp      _g_fidcio       ; +3C  A = operation, B = device
 g_fiddio:       jp      _g_fiddio       ; +40  A = operation, B = @adrv,
     ;      C = @rdrv, HL = parm block
-; +44 and +48 are RESERVED, NOT SPARE.  They belonged to g$rtcraw and
-; g$esptime, which supported GETDATE.COM and CHCKDATE.COM; see the block
-; marked "RETIRED" further down for what they did and how to bring them
-; back.  The two entries stay here as RET so that every offset below +44
-; keeps its value and nothing downstream shifts -- and so that a future
-; gate is given +4C rather than silently reusing an offset that a stale
-; .FID or a stale utility might still call.
+; +44 and +48 are RESERVED, NOT SPARE.  They belonged to two diagnostic
+; gates that no longer exist.  The entries stay here as RET so that every
+; offset below +44 keeps its value and nothing downstream shifts -- and so
+; that a future gate is given +4C rather than silently reusing an offset a
+; stale .FID might still call.
 g_rtcraw:       ret
     .db     0, 0, 0                 ; pad to the table's 4-byte stride
 g_esptime:      ret
@@ -914,16 +910,6 @@ clock_init:
     ld      a, 1
     ld      (clock_ok), a
 
-    ; RETIRED: esp_blk was seeded from clk_blk here, and esp_ok set
-    ; alongside clock_ok, so that GETDATE.COM had a copy of the
-    ; startup reading that DATE SET could not move.
-    ;
-    ;   ld      hl, clk_blk
-    ;   ld      de, esp_blk
-    ;   ld      bc, BLK_SIZE
-    ;   ldir
-    ;   ld      (esp_ok), a
-
     pop     hl
     pop     de
     pop     bc
@@ -1051,160 +1037,6 @@ _g_time:
 
 
 ; =============================================================================
-;  RETIRED -- support for GETDATE.COM and CHCKDATE.COM
-; -----------------------------------------------------------------------------
-;  This block is commented out, and costs the FID heap nothing.  The clock
-;  does not need any of it: it existed so that two transients could ask what
-;  the startup fetch returned and what the ESP32 would say now.
-;
-;  The utilities themselves do not work.  Run on hardware they flood the
-;  console and leave the machine unusable.  The gate table is not the cause:
-;  g$rtcraw and g$esptime were checked in the built image at +44 and +48,
-;  correctly aligned and jumping to the right addresses.  Note that these
-;  would be the ONLY GATES CALLED FROM A CP/M TRANSIENT.  Every other gate in
-;  this table is entered from the BIOS or from a FID module in segment $04,
-;  never from user code in the TPA.  Anything that goes looking for the fault
-;  should start there.
-;
-;  TO BRING IT BACK: uncomment this block, restore the two gate table entries
-;  at +44 and +48 to JP form, uncomment esp_blk and its seeding in clock_init,
-;  and uncomment the second blk_addsec pass in clock_advance.  Each of those
-;  sites is marked "RETIRED".
-; =============================================================================
-;
-;; _g_rtcraw -- diagnostic gate.  HL = an eight-byte buffer in the caller's
-;; segment, filled with:
-;;   +0     status: 0 = the clock was never fetched, 1 = a packet was fetched,
-;;                  3 = the packet was not a usable date
-;;   +1     number of payload bytes in that packet
-;;   +2..+7 the six raw bytes
-;;
-;; This exists so that a failure at startup can be told apart from a wrong
-;; answer without a debugger.  The fetch happens once, during boot, and by the
-;; time anything can be printed the moment has long passed -- so the evidence
-;; is kept.  GETDATE.COM prints it.
-;_g_rtcraw:
-;    push    bc
-;    push    de
-;    push    hl
-;    ld      (tmp_dst), hl
-;    ld      a, (cur_seg)
-;    ld      (tmp_dst+2), a
-;    ld      hl, rtc_stat
-;    ld      de, (tmp_dst)
-;    ld      bc, 8
-;    ldir
-;    pop     hl
-;    pop     de
-;    pop     bc
-;    xor     a
-;    ret.lil
-;
-;
-;; _g_esptime -- compare the running clock with the ESP32's reckoning, and
-;; optionally put the running clock back to it.
-;;
-;; HL = a ten-byte buffer in the caller's segment:
-;;   +0..+4  what the ESP32 would read now
-;;   +5..+9  what CP/M's clock reads now
-;; each in the same form ?time uses: @date low, @date high, hour, minute and
-;; second in BCD.
-;;
-;; C = 0 reports; C = 1 re-anchors the running clock to the ESP32's reckoning
-;; first, so the two halves then agree.
-;;
-;; Returns A = 0 on success, 1 if the startup fetch never produced a usable
-;; date, in which case the buffer is not written.
-;;
-;; BOTH HALVES ARE COMPUTED IN ONE CALL, ON PURPOSE.  If the caller asked for
-;; them separately, the tick counter could advance between the two requests and
-;; a clock that was perfectly in step would report a one-second disagreement.
-;; GETDATE.COM decides whether to set the clock by comparing these two, so that
-;; would make it set the clock at random.
-;;
-;; "What the ESP32 would read now" means the reading taken at startup, carried
-;; forward on the tick counter.  The ESP32 itself is unreachable once the VDP
-;; is in terminal mode -- see the note by clock_init -- so this is as close to
-;; asking it as the machine allows.  It is NOT a fresh reading, and if the
-;; ESP32's clock was wrong at startup this will faithfully put the wrong time
-;; back.
-;_g_esptime:
-;    push    bc
-;    push    de
-;    push    hl
-;    push    ix
-;
-;    ld      (tmp_dst), hl
-;    ld      a, (cur_seg)
-;    ld      (tmp_dst+2), a
-;
-;    ld      a, (esp_ok)
-;    or      a
-;    jr      z, @fail
-;
-;    ; Bring both blocks up to the present before anything is read
-;    ; or compared.  clock_advance moves clk_blk and esp_blk by the
-;    ; same number of seconds, so they stay exactly in step.
-;    call    clock_advance
-;
-;    ld      a, c
-;    or      a
-;    jr      z, @report
-;
-;    ; C = 1: put the running clock back.  Copying the block and
-;    ; re-snapshotting the counter is the whole operation -- the same
-;    ; thing clock_init does at startup, and the same thing ?time
-;    ; does when the BDOS sets the clock.
-;    ld      hl, esp_blk
-;    ld      de, clk_blk
-;    ld      bc, BLK_SIZE
-;    ldir
-;    call    tick_now
-;    ld      (tick_base), hl
-;    xor     a
-;    ld      (tick_frac), a
-;    ld      a, 1
-;    ld      (clock_ok), a
-;
-;@report:
-;    ld      ix, esp_blk
-;    call    blk_pack
-;    ld      hl, time_res
-;    ld      de, (tmp_dst)
-;    ld      bc, 5
-;    ldir
-;
-;    ld      ix, clk_blk
-;    call    blk_pack
-;    ld      hl, time_res
-;    ld      de, (tmp_dst)
-;    ex      de, hl
-;    ld      bc, 5
-;    add     hl, bc                  ; second half starts at +5
-;    ex      de, hl
-;    ld      bc, 5
-;    ldir
-;
-;    pop     ix
-;    pop     hl
-;    pop     de
-;    pop     bc
-;    xor     a
-;    ret.lil
-;
-;@fail:
-;    pop     ix
-;    pop     hl
-;    pop     de
-;    pop     bc
-;    ld      a, 1
-;    or      a
-;    ret.lil
-;
-;
-;
-
-; =============================================================================
 ;  RUNNING THE CLOCK
 ; -----------------------------------------------------------------------------
 ;  _clock (sysvar offset 0) is a 32-bit counter incremented by 2 on every
@@ -1285,23 +1117,6 @@ clock_advance:
     call    blk_addsec
     pop     ix
 
-    ; RETIRED: esp_blk was advanced here in lockstep, by the same BC,
-    ; so that GETDATE.COM could ask what the ESP32 would say now.
-    ; Advancing it in step rather than recomputing it from a stored
-    ; startup anchor was deliberate -- the anchor form is limited to
-    ; one wrap of the tick counter, 38 hours, because the subtraction
-    ; is modulo 2^24, and the regression suite caught it wrapping on a
-    ; simulated seven-day run.  Restore BOTH lines together if this
-    ; ever comes back.
-    ;
-    ;   push    bc              ; blk_addsec is destructive on HL and
-    ;                           ; reads BC, so keep a copy
-    ;   ld      ix, clk_blk
-    ;   call    blk_addsec
-    ;   pop     bc
-    ;   ld      ix, esp_blk
-    ;   call    blk_addsec
-
     pop     hl
     pop     de
     pop     bc
@@ -1309,11 +1124,10 @@ clock_advance:
 
 ; -----------------------------------------------------------------------------
 ;  A "clock block" is six bytes: a three-byte day count, then hour, minute and
-;  second, each binary.  There are two of them -- clk_blk, the running clock,
-;  which DATE SET is allowed to move; and esp_blk, the ESP32's reckoning,
-;  which only the tick may move.  The routines below take the block base in IX
-;  so that the same, once-verified carry logic serves both rather than being
-;  written out twice.
+;  second, each binary.  There is one, clk_blk, the running clock, which
+;  DATE SET is allowed to move.  The routines below take the block base in IX
+;  rather than addressing clk_blk directly, so a second block can be added
+;  without the carry logic being written out twice.
 ; -----------------------------------------------------------------------------
 BLK_DATE:       .equ    0   ; three bytes
 BLK_HOUR:       .equ    3
@@ -1417,10 +1231,9 @@ blk_pack:
 ;      second     byte 4
 ;      year       byte 5, SIGNED, plus 1980
 ;
-;  This runs ONCE, at startup.  month and dayOfWeek are decoded even though
-;  the running clock does not need them, because GETDATE prints them and
-;  because a month of 0 with a day of 0 is the signature of a clock that has
-;  never been set.
+;  This runs ONCE, at startup.  Only the fields the running clock needs are
+;  decoded; month and dayOfWeek are read only far enough to spot a day of 0,
+;  which is the signature of a clock that has never been set.
 ; =============================================================================
 
 ; rtc_decode -- convert rtc_pkt into the held clock.
@@ -1459,21 +1272,6 @@ rtc_decode:
     or      a
     jp      z, @bad     ; JP, not JR: @bad is at the far end of this
     ; routine and out of relative range
-
-    ; RETIRED: month (byte 0 bits 0-3, zero-based) and day of week
-    ; (byte 1 bits 1-3) were decoded here purely so CHCKDATE.COM
-    ; could print them.  The running clock needs neither: it works
-    ; from a day count.  Note if these come back that the packet's
-    ; day of week is not always right, because the ESP32's overflow
-    ; flag persists across a reset.
-    ;
-    ;   ld      a, (rtc_pkt+0)
-    ;   and     $0F
-    ;   ld      (rtc_mon), a
-    ;   ld      a, (rtc_pkt+1)
-    ;   rrca
-    ;   and     $07
-    ;   ld      (rtc_dow), a
 
     ; --- day of year: byte 1 bits 4-7, byte 2 bits 0-4 ----------
     ;
@@ -5501,24 +5299,19 @@ tmp_len:        .dl     0
 ; there is no reason to repeat it.
 sysvars:        .dl     0   ; MOS system variable base, segment 0
 
-; THESE FOUR MUST STAY ADJACENT AND IN THIS ORDER.  _g_rtcraw copies eight
-; bytes starting at rtc_stat straight out to the caller, and GETDATE.COM
-; unpacks them by position.
+; rtc_stat, rtc_len and rtc_pkt hold the startup exchange as it arrived.
+; rtc_pkt is decoded by rtc_decode; rtc_stat records how the exchange went.
 rtc_stat:       .db     0   ; 0 never fetched, 1 packet fetched,
     ; 3 not a usable date
 rtc_len:        .db     0   ; payload length of that packet
 rtc_pkt:        .blkb   6, 0; the raw clock packet, kept from startup
 
-; Fields decoded once at startup.  Only GETDATE reads these; the running
-; clock uses clk_* below.  rtc_yday and rtc_year are .dl for the reason given
-; in the loader-state note below: LD (nn),HL writes three bytes in ADL mode
-; whether or not that was intended, and .dw would put the third into whatever
-; follows.
+; Fields decoded once from the startup packet.  rtc_yday and rtc_year are
+; read by the date conversion below; the running clock itself uses clk_*.
+; Both are .dl for the reason given in the loader-state note below:
+; LD (nn),HL writes three bytes in ADL mode whether or not that was
+; intended, and .dw would put the third into whatever follows.
 rtc_day:        .db     0
-; RETIRED: rtc_mon (0-11, as the VDP reports it) and rtc_dow (0 = Sunday),
-; decoded only for CHCKDATE.COM.
-;   rtc_mon:    .db     0
-;   rtc_dow:    .db     0
 rtc_yday:       .dl     0   ; 0-365, zero-based
 rtc_year:       .dl     0   ; full year
 
@@ -5535,16 +5328,6 @@ clk_date:       .dl     0   ; .dl: LD (nn),HL moves three bytes here
 clk_hour:       .db     0
 clk_min:        .db     0
 clk_sec:        .db     0
-
-; RETIRED: the ESP32's reckoning, a second block advanced in step with
-; clk_blk so that GETDATE.COM could restore the clock to it.
-;
-;   esp_ok:     .db     0   ; non-zero if the startup fetch was usable
-;   esp_blk:
-;   esp_date:   .dl     0
-;   esp_hour:   .db     0
-;   esp_min:    .db     0
-;   esp_sec:    .db     0
 
 ; tick_base is the reading of MOS's counter at the moment clk_* was correct.
 ; tick_frac carries the counts left over after the last whole second, so that
