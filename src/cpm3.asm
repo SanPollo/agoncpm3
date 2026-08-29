@@ -436,15 +436,7 @@ g_fidinit:      jp      _g_fidinit      ; +38  HL = BIOS descriptor block
 g_fidcio:       jp      _g_fidcio       ; +3C  A = operation, B = device
 g_fiddio:       jp      _g_fiddio       ; +40  A = operation, B = @adrv,
     ;      C = @rdrv, HL = parm block
-; +44 and +48 are RESERVED, NOT SPARE.  They belonged to two diagnostic
-; gates that no longer exist.  The entries stay here as RET so that every
-; offset below +44 keeps its value and nothing downstream shifts -- and so
-; that a future gate is given +4C rather than silently reusing an offset a
-; stale .FID might still call.
-g_rtcraw:       ret
-    .db     0, 0, 0                 ; pad to the table's 4-byte stride
-g_esptime:      ret
-    .db     0, 0, 0
+; The table ends here.  The next gate added takes +44.
 
 
 ; =============================================================================
@@ -769,9 +761,20 @@ conout_char:
     ld      a, d
     or      e
     jr      nz, @wait
-    ; Timed out: MOS itself gives up after TX_WAIT rather than
-    ; hang forever, and does the same here.  The character is
-    ; dropped rather than risk a second permanent hang.
+    ; Timed out: THE CHARACTER IS DROPPED, AND THIS IS NOT WHAT
+    ; MOS DOES.
+    ;
+    ; MOS's UART0_serial_TX is bounded by the same TX_WAIT and
+    ; returns with carry clear when it expires, but its caller
+    ; UART0_serial_PUTCH loops on that -- "call UART0_serial_TX /
+    ; jr nc, back" -- so the bound breaks only the inner poll and
+    ; the byte is always sent in the end.  UART0_serial_PUTCH also
+    ; waits on CTS, MSR bit 4, before the first attempt when
+    ; hardware flow control is enabled.
+    ;
+    ; Neither is done here.  A character can therefore be lost
+    ; when the VDP deasserts CTS under heavy output, which breaks
+    ; any escape sequence it falls in the middle of.
     pop     de
     pop     af
     ret
@@ -872,9 +875,6 @@ clock_init:
     push    de
     push    hl
 
-    xor     a
-    ld      (rtc_stat), a           ; 0 = nothing has been attempted
-
     ; Bare, for the reason set out at length in _start: this runs in
     ; the loader phase, where MB is 0 and MOS calls take no
     ; bracketing.  mos_enter would be harmless on its own; it is
@@ -893,11 +893,6 @@ clock_init:
     ld      de, rtc_pkt
     ld      bc, 6
     ldir
-
-    ld      a, 6
-    ld      (rtc_len), a
-    ld      a, 1
-    ld      (rtc_stat), a           ; 1 = a packet was fetched
 
     call    rtc_decode              ; CF set if it is not a usable date
     jr      c, @unset
@@ -1259,7 +1254,6 @@ rtc_decode:
     rlca
     rlca
     or      c
-    ld      (rtc_day), a
 
     ; A DAY OF ZERO MEANS THE CLOCK HAS NEVER BEEN READ.
     ;
@@ -1435,8 +1429,6 @@ rtc_decode:
     ret
 
 @bad:
-    ld      a, 3
-    ld      (rtc_stat), a
     pop     hl
     pop     de
     pop     bc
@@ -4446,22 +4438,15 @@ dg_fail:        .db     " FAILED rc=", 0
 dg_dio:         .db     13, 10, "FID: io ", 0
     endif
 
-
-; handle_addr and drv_handles are GONE.
+; THERE IS NO PER-DRIVE HANDLE ARRAY.
 ;
-; They held one MOS file handle per drive for the whole session.  MOS allows
-; only a fixed number of files open at once -- eight, on the evidence -- so
-; with eight images mounted there was no handle left for anything else, and
-; the FID loader's attempt to open FID.INI failed for want of one.
-; Confirmed on hardware: renaming one image freed a handle and the driver
-; loaded.
+; MOS allows only a fixed number of files open at once -- eight, on the
+; evidence -- so one handle held per drive for the length of the session
+; would leave nothing for anything else with eight images mounted, and the
+; FID loader could not open FID.INI.
 ;
-; The array is replaced by cur_unit and cur_handle: ONE image open at a time,
-; opened on demand, exactly as the CP/M 2.2 port does.  See drv_open.
-;
-; The 24-bit clear this routine documented still matters elsewhere, so the
-; note has been kept at the sites that rely on it rather than lost with the
-; code.
+; cur_unit and cur_handle hold ONE image open at a time, opened on demand,
+; exactly as the CP/M 2.2 port does.  See drv_open.
 
 ; -----------------------------------------------------------------------------
 ; mos_enter / mos_leave -- MOS requires MBASE to be zero for its API calls, as
@@ -5299,19 +5284,15 @@ tmp_len:        .dl     0
 ; there is no reason to repeat it.
 sysvars:        .dl     0   ; MOS system variable base, segment 0
 
-; rtc_stat, rtc_len and rtc_pkt hold the startup exchange as it arrived.
-; rtc_pkt is decoded by rtc_decode; rtc_stat records how the exchange went.
-rtc_stat:       .db     0   ; 0 never fetched, 1 packet fetched,
-    ; 3 not a usable date
-rtc_len:        .db     0   ; payload length of that packet
+; The startup clock packet, copied out of MOS's system variables by
+; clock_init and decoded once by rtc_decode.
 rtc_pkt:        .blkb   6, 0; the raw clock packet, kept from startup
 
-; Fields decoded once from the startup packet.  rtc_yday and rtc_year are
-; read by the date conversion below; the running clock itself uses clk_*.
-; Both are .dl for the reason given in the loader-state note below:
-; LD (nn),HL writes three bytes in ADL mode whether or not that was
-; intended, and .dw would put the third into whatever follows.
-rtc_day:        .db     0
+; Fields decoded from that packet.  rtc_yday and rtc_year are read by the
+; date conversion below; the running clock itself uses clk_*.  Both are .dl
+; for the reason given in the loader-state note below: LD (nn),HL writes
+; three bytes in ADL mode whether or not that was intended, and .dw would
+; put the third into whatever follows.
 rtc_yday:       .dl     0   ; 0-365, zero-based
 rtc_year:       .dl     0   ; full year
 
@@ -5520,10 +5501,10 @@ mio_dma:        .dl     0   ; {segment, offset} of the CP/M buffer
 
 ; --- CCP image ---
 ;
-; Formerly an .equ of $070000, which is now the first byte of the M: RAM
-; drive.  It is NOT declared with .blkb: doing so emitted 8K of zeros into
-; cpm3.bin, taking the file from about 2K to over 10K, all of it padding
-; that the loader would then read off the SD card for no reason.
+; This is NOT declared with .blkb: doing so would emit 8K of zeros into
+; cpm3.bin, taking the file to over 17K, all of it padding the loader would
+; then read off the SD card for no reason.  Nor can it be a fixed .equ of
+; $070000, which is the first byte of the M: RAM drive.
 ;
 ; Instead the buffer is placed immediately after the last byte this file
 ; actually emits, and cleared at startup by zero_ccp.  Declaring it this way

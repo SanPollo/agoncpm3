@@ -491,10 +491,14 @@ io$dir:		ds	1	; 0 = read, 1 = write
 ;
 ; COST: nothing at generation time, nothing in common memory, and
 ; nothing in the TPA.  Each installed drive takes 1,349 bytes of the
-; supervisor's 44,800-byte bank-0 heap -- 256 for the allocation
-; vector, 529 each for the directory and data buffers with their BCBs
-; and list heads, and 35 for the XDPH.  All seven together is 9,443
-; bytes, about a fifth of the heap.
+; supervisor's bank-0 heap -- 256 for the allocation vector, 529 each
+; for the directory and data buffers with their BCBs and list heads,
+; and 35 for the XDPH.  All seven together is 9,443 bytes.
+;
+; The heap runs from HEAP0_BASE to the base of the banked system, which
+; heap0_init derives from the CPM3.SYS header rather than assuming, so
+; its size depends on how large the banked BDOS and BIOS turn out to
+; be.  It is about 44K, which leaves ample room for seven drives.
 
 FIRSTDYN equ	3		; first dynamic drive, D:
 NDYNDRV	equ	10		; one past the last, J:
@@ -756,9 +760,14 @@ m$dir:		ds	1	; 0 = read, 1 = write
 ; is forced.  An XDPH holds four SIXTEEN-BIT addresses, and the kernel
 ; reaches them with
 ;
-;	lxi d,-8 ! dad d		; read
-;	mov a,m ! inx h ! mov h,m ! mov l,a
+;	lxi d,-8 / dad d		; read
+;	mov a,m / inx h / mov h,m / mov l,a
 ;	pchl
+;
+; (slashes above stand for the exclamation-mark separator used in
+; the kernel source.  RMAC ends a comment at that character and
+; assembles whatever follows it, so quoting kernel lines verbatim
+; inside a comment is unsafe.)
 ;
 ; so whatever the XDPH names must be Z80 code in bank 0.  A driver's
 ; handlers are TWENTY-FOUR-BIT addresses in segment $04 and cannot go

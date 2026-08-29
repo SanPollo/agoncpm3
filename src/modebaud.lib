@@ -14,24 +14,20 @@
 ;
 ;
 ; BIOSKRNL.ASM opens with "maclib modebaud", but MODEBAUD.LIB is not
-; present in the CP/M 3 source archive.  It was previously dealt with by
-; commenting that line out.  That left "ani mb$xonxoff" in coster with an
-; undefined symbol, which RMAC does not treat as fatal -- it reports
+; present in the CP/M 3 source archive.  Commenting that line out instead
+; leaves "ani mb$xonxoff" in coster with an undefined symbol, which RMAC
+; does not treat as fatal -- it reports
 ;
 ;       U0137 7EE600      mov a,m , ani mb$xonxoff
 ;
-; (the separator in that quoted line is written as a comma here on
-; purpose: RMAC treats an exclamation mark as a statement separator
-; that TERMINATES a
-; comment, so an exclamation mark inside a comment gets assembled as a
-; real instruction.  Reproducing the error text verbatim caused exactly
-; that, which is a neat demonstration of the hazard.)
+; (the separator in that quoted line is written as a comma on purpose:
+; RMAC treats an exclamation mark as a statement separator that
+; TERMINATES a comment, so an exclamation mark inside a comment gets
+; assembled as a real instruction.)
 ;
-; and quietly assembles ANI 0.  The effect happens to be harmless (every
-; device is then treated as non-XON, which is what we want), but an
-; assembler error absorbed in silence is not something to build on, and
-; the previous claim that the kernel assembled with no undefined symbols
-; was simply wrong.
+; and quietly assembles ANI 0.  The effect is harmless in itself, since
+; every device is then treated as non-XON, which is what we want, but an
+; assembler error absorbed in silence is not something to build on.
 ;
 ; This file restores the symbols from their documented definitions so
 ; that BIOSKRNL.ASM can be assembled unmodified.

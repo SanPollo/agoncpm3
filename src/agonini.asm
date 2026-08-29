@@ -47,8 +47,8 @@ cseg	; ?ldccp and ?rlccp are reached from the kernel's BOOT and
 ;              local stack, and entsp.  One contiguous
 ;              run at the end of the module, verified
 ;              against resbdos.asm.
-	;   SCB page   the System Control Block proper plus      256 bytes
-	;              olog/rlog.  Part of this page is static
+;   SCB page   the System Control Block proper plus      256 bytes
+;              olog/rlog.  Part of this page is static
 ;              jump vectors, but it is not worth
 ;              splitting a single page.
 ;   Kernel     boot$stack (64) and @cbnk (1)              65 bytes
@@ -422,8 +422,8 @@ rammsg:
 	;	of the CCP somewhere and restore it rather than re-reading
 	;	the file.  With four spare 64K segments this machine has
 	;	room for that several times over, and it would make warm
-	;	boots essentially instant.  Not yet done: for now this
-	;	simply re-reads the file, which is correct but slower.
+	;	boots essentially instant.  This implementation re-reads
+	;	the file, which is correct but slower.
 
 ?rlccp:
 	GATE	g$ldccp

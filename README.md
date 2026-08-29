@@ -7,8 +7,6 @@
 5. [Memory Map](#memory-map)
 6. [Known Issues and Future Improvements](#known-issues-and-future-improvements)
 
----
-
 ## About
 
 This is a port of CP/M Plus (also known as CP/M 3) for the [Agon Light](https://www.olimex.com/Products/Retro-Computers/AgonLight2/open-source-hardware) open source modern retro computer.
@@ -29,7 +27,6 @@ The supervisor is based, in part, on the [Agon CP/M 2.2](https://github.com/nihi
 [Top](#cpm-plus-for-agon-light)
 
 ---
-
 ## Installation
 
 1. Copy the contents of the `bin/` directory to a new subdirectory on your Agon Light's SD card e.g. `/cpm3`
@@ -46,7 +43,6 @@ The supervisor is based, in part, on the [Agon CP/M 2.2](https://github.com/nihi
 [Top](#cpm-plus-for-agon-light)
 
 ---
-
 ## Disc Drives
 
 Drives `A:` and `B:` are reserved for floppy drives (real or emulated), which can be implemented using [FID](#fids) drivers.
@@ -60,7 +56,6 @@ Other non-reserved drive letters can also be used for FIDs.
 [Top](#cpm-plus-for-agon-light)
 
 ---
-
 ## FIDs
 
 Field installable device drivers, or FIDs, allow drivers to be loaded at boot time. The `FID.INI` file specifies the names and location of these FIDs.
@@ -74,14 +69,13 @@ For information about writing your own FIDs, [see here](fid/FID.md).
 [Top](#cpm-plus-for-agon-light)
 
 ---
-
 ## Memory Map
 
 ```
-$000000-$01FFFF  eZ80 Flash (MOS)
-$040000-$04FFFF  Segment $04 - ADL-mode Supervisor and FID Heap
-$050000-$05FFFF  CP/M Bank 1 - TPA (60.76KB)
-$060000-$06FFFF  CP/M Bank 0 - System Bank
+$000000-$01FFFF  eZ80 on-chip flash (MOS)
+$040000-$04FFFF  Segment $04 - ADL-mode supervisor and the FID heap
+$050000-$05FFFF  CP/M bank 1 - TPA (60.76KB)
+$060000-$06FFFF  CP/M bank 0 - System Bank
 $070000-$0BBFFF  RAM Drive (311,296 bytes)
 $0BC000-$0BFFFF  MOS Data, Heap and Stack (DO NOT TOUCH!)
 ```
@@ -89,11 +83,11 @@ $0BC000-$0BFFFF  MOS Data, Heap and Stack (DO NOT TOUCH!)
 Inside segment `$04`:
 
 ```
-$040000-$04252E  Supervisor (cpm3.bin)
-$040100-$04014B  Gate Table - Fixed address, append only
+$040000-$042510  Supervisor (cpm3.bin)
+$040100-$040143  Gate Table - Fixed address, append only
 $040180-$0401FF  SVC Table - Fixed address, append only
-$04252F-$04452E  CCP Buffer (8K)
-$04452F-$04FFFF  FID Heap (47,825 bytes)
+$042511-$044510  CCP Buffer (8K)
+$044511-$04FFFF  FID Heap (47,855 bytes)
 ```
 
 [Top](#cpm-plus-for-agon-light)
@@ -106,15 +100,19 @@ $04452F-$04FFFF  FID Heap (47,825 bytes)
 
 The maximum size of `FID.INI` is 512 bytes, and anything past that limit will not be parsed. This should be enough, though, as wildcards are allowed.
 
-### Formatting Discs
-
-At the moment there is no command that will let you format the virtual hard discs, or the RAM drive. A blank [cpmX.dsk](./cpmX.dsk) exists as a workaround to the first issue, but the issue of reformatting the RAM drive is unresolved.
-
 ### RTC
 
 The clock is synced with the ESP's time when CP/M boots, and then maintains its own time. This is because, after entering terminal mode, it is not possible to retrieve the time again from the ESP without pausing the terminal.
 
 Note that while you can set the CP/M clock using the `DATE.COM` utility by typing `DATE SET`, the time stays in CP/M, and is not written back to the ESP.
+
+### Stray Character When Changing Drive
+
+The first time you access a disc drive that has been written to, a `ç` appears on screen, and there is a pause of around a second.
+
+This happens because CP/M keeps one disc image open at a time, and opens the next on demand, so accessing another drive closes the current image. If that drive, which is stored as a .DSK file on the SD card, has been changed, MOS timestamps the .DSK file on close. As part of this operation, it asks VDP for the time and date. However, as CP/M runs in terminal mode, VDP cannot reply to its request. MOS times out after a second, and stamps the file with the last known date. The side effect of this is that part of this request (one third) appears on the screen as the `ç` character.
+
+Note that this is only a cosmetic defect, and the only affects emulated drives (.DSK files). The only change made to the .DSK file on the SD card is the time stamp, and this does not affect RAM drives as MOS does not perform any operations on those.
 
 ### GSX Graphics
 

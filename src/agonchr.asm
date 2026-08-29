@@ -169,7 +169,7 @@ ci$fid:
 	GATE	g$fidcio
 	ret
 ci$uart:
-	; TODO: serial input is not yet wired up.  Returning ^Z rather
+	; Serial input is not wired up.  Returning ^Z rather
 	; than blocking forever means a mis-set @civec shows up as an
 	; immediate end of file instead of an apparent hang.
 	mvi	a,1Ah
@@ -191,7 +191,7 @@ co$fid:
 	GATE	g$fidcio
 	ret
 co$uart:
-	; TODO: serial output is not yet wired up.  Discard rather than
+	; Serial output is not wired up.  Discard rather than
 	; fall through to the VDP, so that redirection failures are
 	; visible instead of silently working.
 	ret

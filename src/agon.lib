@@ -83,40 +83,6 @@ g$fiddio	equ	gate$base+40h	; disk I/O for a drive supplied by a
 					; same nine-byte shape g$dread uses.
 					; Returns A = 0, or 1 for a permanent
 					; error.  See fid$io in agondsk.asm.
-; ---------------------------------------------------------------------
-; RETIRED -- RESERVED, NOT SPARE.
-;
-; The two entries below are RET in the built image and do nothing.  The
-; gate bodies are retired rather than left as a trap.  See the block
-; marked "RETIRED" in cpm3.asm.
-;
-; The equates are KEPT so that every offset below +44h holds its value
-; and nothing downstream shifts, and so that a new gate is given +4Ch
-; rather than silently reusing an offset a stale .FID might still call.
-; DO NOT CALL EITHER OF THESE.  The descriptions record what they did.
-; ---------------------------------------------------------------------
-g$rtcraw	equ	gate$base+44h	; RETIRED.  Was: the raw VDP clock packet
-					; and the status of the exchange that
-					; fetched it.  HL = an eight-byte buffer:
-					;   +0 status  0 not attempted, 1 packet
-					;             received, 2 no reply, 3 not
-					;             a usable date
-					;   +1 payload length of that packet
-					;   +2 six raw packet bytes
-					; Used by GETDATE.COM; nothing in the
-					; BIOS depends on it.
-g$esptime	equ	gate$base+48h	; RETIRED.  Was: compare the running clock with the
-					; ESP32's reckoning, and optionally put
-					; the clock back to it.  HL = a ten-byte
-					; buffer, filled with the ESP32's time
-					; at +0 and CP/M's at +5, each as @date
-					; low, @date high, hour, minute and
-					; second in BCD.  <C> = 0 to report,
-					; 1 to set the clock first.  Returns
-					; A = 0, or 1 if the startup fetch never
-					; produced a usable date.  Used by
-					; GETDATE.COM and CHCKDATE.COM.
-
 ; GATE -- call the supervisor entry at offset ?addr.
 ; Preserves all registers except those the specific gate documents.
 

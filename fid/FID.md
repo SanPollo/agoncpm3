@@ -16,8 +16,8 @@ Agon CP/M 3: Loadable Driver Mechanism
 6. [SVC Table](#svc-table)
 7. [Character Devices (svc_chook)](#character-devices-svc_chook)
 8. [Disc Drives (svc_dhook)](#disc-drives-svc_dhook)
-9. [The Two Descriptors](#the-two-descriptors)
-10. [Worked Examples](#worked-examples)
+9. [The two descriptors](#the-two-descriptors)
+10. [Worked examples](#worked-examples)
 11. [Diagnostics](#diagnostics)
 12. [Building](#building)
 
@@ -46,11 +46,11 @@ The FID is an ADL-mode eZ80 module living in segment `$04`, alongside the superv
 ## Memory Map
 
 ```
-segment $04   $040000-$04252E   Supervisor (cpm3.bin)
-              $040100-$04014B   Gate Table - Fixed, append only
+segment $04   $040000-$042510   Supervisor (cpm3.bin)
+              $040100-$040143   Gate Table - Fixed, append only
               $040180-$0401FF   SVC Table - Fixed, append only
-              $04252F-$04452E   CCP Buffer (8K)
-              $04452F-$04FFFF   FID Heap - (47,825 bytes)
+              $042511-$044510   CCP Buffer (8K)
+              $044511-$04FFFF   FID Heap - (47,855 bytes)
 ```
 
 The heap is whatever is left of segment `$04` after the supervisor, and the CCP buffer. Modules are loaded into it end to end, and a module may take more of it for its own use with `svc_alloc`. The boundaries move with the size of `cpm3.bin`, so the figures above are those of the build this document ships with.
@@ -243,7 +243,7 @@ The supervisor keeps handlers in a table indexed straight by drive letter: sixte
 
 So the routine is split: `_g_drvnew` is a gate front end that does the copy, and `drvnew_core` does the work from `dreq` and returns with a plain `RET` so it can be called from ADL-mode code. `svc_dhook` fills `dreq` itself and calls the core. There is one implementation of the drive-building logic.
 
-### Drive Letters
+### Drive letters
 
 ```
 FIRSTDYN  equ  3     first dynamic drive, D:
@@ -293,7 +293,7 @@ A driver must not format its medium in `init`. The kernel calls `init` from BOOT
 
 ---
 
-## The Two Descriptors
+## The two descriptors
 
 At `?init` the BIOS hands the supervisor a description of itself.
 
@@ -318,7 +318,7 @@ Both copy lengths in `_g_fidinit` must match the blocks they read - six bytes an
 
 ---
 
-## Worked Examples
+## Worked examples
 
 `ramd.asm` → `RAMD.FID` - a 32K RAM disc on K:, carved from the FID heap with `svc_alloc`. The model for a disc driver: a complete, working one small enough to read in a sitting. It arrives formatted and empty, so `DIR K:` reports no file and the drive is ready to be written to.
 
