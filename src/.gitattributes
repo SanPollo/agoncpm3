@@ -1,0 +1,26 @@
+# Line endings in this directory are not a matter of taste.
+#
+# RMAC silently skips a source block whose lines end in LF alone.  It
+# reports no error: the module assembles to a plausible size with lines
+# missing, and the fault shows up only on hardware.  Everything here that
+# is assembled with RMAC must therefore reach the working tree as CRLF.
+#
+# cpm3.asm is the exception.  It is assembled with ez80asm, which expects
+# LF, so it is listed again below to override the *.asm rule above it.
+
+*               text=auto
+
+# RMAC and DRLINK sources -- MUST be CRLF
+*.asm           text eol=crlf
+*.lib           text eol=crlf
+
+# ez80asm source and host tools -- LF
+cpm3.asm        text eol=lf
+*.py            text eol=lf
+
+# Binaries.  gencpm.dat is listed because it contains no NUL and no byte
+# above 126, so git would otherwise treat it as text and rewrite the CRLF
+# pairs inside it, corrupting GENCPM's saved answers.
+*.com           binary
+*.spr           binary
+*.dat           binary

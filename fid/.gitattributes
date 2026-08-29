@@ -1,0 +1,14 @@
+# Everything in this directory is built with ez80asm or Python, both of
+# which expect LF.  The CRLF rule in src/.gitattributes applies to the RMAC
+# sources only and must not be copied here.
+
+*               text=auto
+
+*.asm           text eol=lf
+*.inc           text eol=lf
+*.py            text eol=lf
+*.md            text eol=lf
+
+# Built driver modules
+*.fid           binary
+*.FID           binary
