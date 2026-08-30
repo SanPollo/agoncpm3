@@ -117,7 +117,9 @@ REG_THR:        .equ    UART0+0         ; transmit holding
 REG_IER:        .equ    UART0+1
 REG_FTC:        .equ    UART0+2
 REG_LSR:        .equ    UART0+5
+REG_MSR:        .equ    UART0+6
 LSR_RDY:        .equ    $01 ; receive data ready
+MSR_CTS:        .equ    $10 ; bit 4, set = clear to send
 
 ; MOS's own UART0_serial_TX (agon-mos/src/serial.asm) polls THIS bit --
 ; UART_LSR_ETH, $20, "transmit holding register empty" -- not the confusingly
@@ -126,10 +128,6 @@ LSR_RDY:        .equ    $01 ; receive data ready
 ; loaded).  The CP/M 2.2 port polls $40, and I copied that uncritically.
 ; MOS's own working code is the trustworthy reference: use $20.
 LSR_ETH:        .equ    $20 ; transmit holding register empty
-TX_WAIT:        .equ    16384           ; matches MOS's own TX_WAIT bound;
-    ; an unbounded wait on a bit that
-    ; never sets is a silent, permanent
-    ; hang with no panic
 
 ; --- REAL-TIME CLOCK -----------------------------------------------------
 ;
@@ -746,42 +744,46 @@ _g_conout:
 ; Z80 mode; an internal caller needs an ordinary return.  Same split as
 ; drv_open and _g_dlogin.
 conout_char:
-    ; C holds the character throughout: the countdown MUST use a
-    ; register pair other than BC, or it overwrites C before the
-    ; character is ever written out.  (First attempt at this got
-    ; that wrong -- caught in review before it reached hardware.)
+    ; CTS IS WAITED ON BEFORE EVERY CHARACTER, AND THE CHARACTER IS
+    ; NEVER ABANDONED.
+    ;
+    ; The eZ80's transmitter does not gate itself on CTS.  MOS sets
+    ; UART0_MCTL to 02h, which enables RTS and nothing else, so
+    ; LSR_ETH sets as soon as the holding register drains, whatever
+    ; the VDP's state.  Flow control on this link is enforced in
+    ; software at both ends.
+    ;
+    ; The VDP drives our CTS from its own receive buffer.  That
+    ; buffer is 256 bytes (UART_RX_SIZE in the VDP's agon.h) and
+    ; setVDPProtocolDuplex gives the ESP32 a flow control threshold
+    ; of 64.  It applies in terminal mode as well, because
+    ; connectSerialPort attaches the terminal to the port
+    ; setupVDPProtocol has already configured rather than opening
+    ; one of its own.  Transmitting without checking CTS overruns
+    ; that buffer, and the bytes are lost at the far end, which
+    ; corrupts any escape sequence they fall in.
+    ;
+    ; MOS makes the same wait, in UART0_serial_PUTCH, before every
+    ; character it prints.
+    ;
+    ; Both waits below are unbounded, as MOS's are.  If the VDP
+    ; never releases CTS there is no console left to report it to,
+    ; and a machine stopped here is easier to diagnose than one
+    ; quietly corrupting its own output.
+    ;
+    ; C holds the character throughout, so nothing here may write
+    ; to it.
     push    af
-    push    de
-    ld      de, TX_WAIT
+@cts:
+    in0     a, (REG_MSR)
+    and     MSR_CTS
+    jr      z, @cts     ; VDP's buffer is full; wait for it
 @wait:
     in0     a, (REG_LSR)
     and     LSR_ETH
-    jr      nz, @send
-    dec     de
-    ld      a, d
-    or      e
-    jr      nz, @wait
-    ; Timed out: THE CHARACTER IS DROPPED, AND THIS IS NOT WHAT
-    ; MOS DOES.
-    ;
-    ; MOS's UART0_serial_TX is bounded by the same TX_WAIT and
-    ; returns with carry clear when it expires, but its caller
-    ; UART0_serial_PUTCH loops on that -- "call UART0_serial_TX /
-    ; jr nc, back" -- so the bound breaks only the inner poll and
-    ; the byte is always sent in the end.  UART0_serial_PUTCH also
-    ; waits on CTS, MSR bit 4, before the first attempt when
-    ; hardware flow control is enabled.
-    ;
-    ; Neither is done here.  A character can therefore be lost
-    ; when the VDP deasserts CTS under heavy output, which breaks
-    ; any escape sequence it falls in the middle of.
-    pop     de
-    pop     af
-    ret
-@send:
+    jr      z, @wait    ; holding register still busy
     ld      a, c
     out0    (REG_THR), a
-    pop     de
     pop     af
     ret
 
@@ -5221,22 +5223,20 @@ console_init:
 ; Used by console_init only; CP/M's own output goes through _g_conout.
 ; -----------------------------------------------------------------------------
 con_put:
-    push    de
-    ld      de, TX_WAIT
+    ; Same shape as conout_char: wait for CTS, then for the holding
+    ; register, and never abandon the character.  See the note there.
+    push    af
+@cpcts:
+    in0     a, (REG_MSR)
+    and     MSR_CTS
+    jr      z, @cpcts
 @cpwait:
     in0     a, (REG_LSR)
     and     LSR_ETH
-    jr      nz, @cpsend
-    dec     de
-    ld      a, d
-    or      e
-    jr      nz, @cpwait
-    pop     de
-    ret     ; timed out; drop the byte
-@cpsend:
+    jr      z, @cpwait
     ld      a, c
     out0    (REG_THR), a
-    pop     de
+    pop     af
     ret
 
 ; Switch to terminal mode.  The command and nothing else.

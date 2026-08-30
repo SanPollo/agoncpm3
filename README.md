@@ -15,6 +15,8 @@ It is styled after Amstrad CP/M Plus for the [CPC](https://en.wikipedia.org/wiki
 
 The supervisor is based, in part, on the [Agon CP/M 2.2](https://github.com/nihirash/Agon-CPM2.2) port by Aleksandr Sharikhin (nihirash). If you like this project, then please check out his project, and maybe [buy him a coffee](https://ko-fi.com/D1D6JVS74). Personally, I'm a tea man.
 
+![image](images/screenshot.png)
+
 ### Features
 
 * Bank switching between two eZ80 64K segments.
@@ -83,11 +85,11 @@ $0BC000-$0BFFFF  MOS Data, Heap and Stack (DO NOT TOUCH!)
 Inside segment `$04`:
 
 ```
-$040000-$042510  Supervisor (cpm3.bin)
+$040000-$042505  Supervisor (cpm3.bin)
 $040100-$040143  Gate Table - Fixed address, append only
 $040180-$0401FF  SVC Table - Fixed address, append only
-$042511-$044510  CCP Buffer (8K)
-$044511-$04FFFF  FID Heap (47,855 bytes)
+$042506-$044505  CCP Buffer (8K)
+$044506-$04FFFF  FID Heap (47,866 bytes)
 ```
 
 [Top](#cpm-plus-for-agon-light)
@@ -108,11 +110,15 @@ Note that while you can set the CP/M clock using the `DATE.COM` utility by typin
 
 ### Stray Character When Changing Drive
 
-The first time you access a disc drive that has been written to, a `ç` appears on screen, and there is a pause of around a second.
+The first time you change away from a disc drive that has been written to, a `ç` appears on screen and there is a pause of about a second before the new prompt.
 
-This happens because CP/M keeps one disc image open at a time, and opens the next on demand, so accessing another drive closes the current image. If that drive, which is stored as a .DSK file on the SD card, has been changed, MOS timestamps the .DSK file on close. As part of this operation, it asks VDP for the time and date. However, as CP/M runs in terminal mode, VDP cannot reply to its request. MOS times out after a second, and stamps the file with the last known date. The side effect of this is that part of this request (one third) appears on the screen as the `ç` character. I have opened an [Issue on the MOS repository](https://github.com/AgonPlatform/agon-mos/issues/210) with some suggestions on how this issue could be solved.
+CP/M keeps one disc image open at a time and opens the next on demand, so changing drives closes the image you are leaving. MOS timestamps a file when it closes it, and to get the time it asks the VDP for it. CP/M has put the VDP into terminal mode by then, so the four bytes of that request are printed as characters instead of being interpreted as a command, and no reply can come back. MOS waits about a second for one, gives up, and stamps the file with the last time it knew about instead. The character you see is the third byte of the request.
 
-Note that this is only a cosmetic defect, and the only affects emulated drives (.DSK files). The only change made to the .DSK file on the SD card is the time stamp, and this does not affect RAM drives as MOS does not perform any operations on those.
+Only a drive that has actually been written to is affected, and only the first time you leave it. Drives `M:` and any RAM drive supplied by a FID are never affected, as they do not use files on the SD card.
+
+If a `PROFILE.SUB` is present, the CCP writes a temporary file to the boot drive at every startup, so the first drive change after booting will always show this.
+
+Nothing is lost or corrupted: the file's contents are untouched, and only its timestamp on the SD card is affected. That timestamp will show roughly when CP/M was started rather than when the drive was changed, because MOS cannot read the clock again once CP/M owns the terminal.
 
 ### GSX Graphics
 

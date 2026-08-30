@@ -46,11 +46,11 @@ The FID is an ADL-mode eZ80 module living in segment `$04`, alongside the superv
 ## Memory Map
 
 ```
-segment $04   $040000-$042510   Supervisor (cpm3.bin)
+segment $04   $040000-$042505   Supervisor (cpm3.bin)
               $040100-$040143   Gate Table - Fixed, append only
               $040180-$0401FF   SVC Table - Fixed, append only
-              $042511-$044510   CCP Buffer (8K)
-              $044511-$04FFFF   FID Heap - (47,855 bytes)
+              $042506-$044505   CCP Buffer (8K)
+              $044506-$04FFFF   FID Heap - (47,866 bytes)
 ```
 
 The heap is whatever is left of segment `$04` after the supervisor, and the CCP buffer. Modules are loaded into it end to end, and a module may take more of it for its own use with `svc_alloc`. The boundaries move with the size of `cpm3.bin`, so the figures above are those of the build this document ships with.
